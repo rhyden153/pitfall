@@ -1,0 +1,25 @@
+{
+  "name": "pitfall",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/engine.test.mjs",
+    "test:browser": "playwright test",
+    "typecheck": "nuxt typecheck",
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.3.11"
+  }
+}
