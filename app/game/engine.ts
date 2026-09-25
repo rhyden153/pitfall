@@ -1,3 +1,5 @@
+import { TicTacToe } from './tictactoe.ts'
+
 export const WIDTH = 960
 export const HEIGHT = 480
 export const GROUND = 316
@@ -9,10 +11,13 @@ export const RUN_SPEED = 220
 export const PIT_HALF_WIDTH = 145
 // Harry starts (and respawns in scene 001) just to the right of base camp.
 export const CAMP_START_X = 250
-// Base camp is where the expedition begins: Harry can't walk back through the camp (or the tunnel
-// beneath it) and wrap around to scene 255.
-export const CAMP_EDGE_X = 226
+// Base camp is where the expedition begins: Harry can wander the camp as far as the red pennant,
+// but can't walk past it (or the tunnel's end beneath it) and wrap around to scene 255.
+export const CAMP_EDGE_X = 30
 export const CAMP_TUNNEL_EDGE_X = 12
+// Standing in the tent's open flap and pressing up takes Harry inside to the games table.
+export const TENT_DOOR_X = 105
+export const TENT_DOOR_REACH = 16
 // Vine geometry: the hand end sits 75px above the ground at the bottom of the swing and
 // reaches 184px either side of centre, rising only ~30px at the ends.
 export const VINE_LENGTH = 579
@@ -24,7 +29,7 @@ export const HAZARD_REACH = 27
 export const TREASURE_VALUES = { bag: 2000, silver: 3000, gold: 4000, ring: 5000 } as const
 
 export type Treasure = keyof typeof TREASURE_VALUES
-export type Status = 'ready' | 'playing' | 'paused' | 'over' | 'won'
+export type Status = 'ready' | 'playing' | 'paused' | 'over' | 'won' | 'tent'
 export type Input = { left: boolean; right: boolean; up: boolean; down: boolean; jump: boolean }
 export const emptyInput = (): Input => ({ left: false, right: false, up: false, down: false, jump: false })
 export type Room = {
@@ -38,8 +43,9 @@ export type Player = {
   grounded: boolean; layer: 'surface' | 'tunnel'; climbing: boolean
   swinging: boolean; invulnerable: number; grabCooldown: number
 }
-export type GameEvent = 'jump' | 'swing' | 'treasure' | 'hurt' | 'fall' | 'log' | 'win'
+export type GameEvent = 'jump' | 'swing' | 'treasure' | 'hurt' | 'fall' | 'log' | 'win' | 'tent'
 export type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string }
+export const atTentDoor = (roomIndex: number, p: Player) => roomIndex === 0 && p.layer === 'surface' && p.grounded && !p.climbing && Math.abs(p.x - TENT_DOOR_X) < TENT_DOOR_REACH
 export const wrap = (n: number, max: number) => ((n % max) + max) % max
 
 // A maximal eight-bit feedback sequence makes a stable, circular 255-scene jungle.
@@ -74,6 +80,8 @@ export function createWorld(): Room[] {
 }
 
 export class PitfallEngine {
+  // The tent's games table; the running tally lasts for the whole expedition.
+  tent = new TicTacToe()
   rooms = createWorld()
   status: Status = 'ready'
   roomIndex = 0
@@ -88,6 +96,7 @@ export class PitfallEngine {
   player: Player = this.newPlayer(CAMP_START_X)
   deathTimer = 0
   lastJump = false
+  lastUp = false
   logContact = 0
   particles: Particle[] = []
   events: GameEvent[] = []
@@ -97,8 +106,8 @@ export class PitfallEngine {
   get room() { return this.rooms[this.roomIndex]! }
   get treasureCount() { return this.collected.size }
 
-  newPlayer(x = 108): Player {
-    return { x, y: GROUND, vx: 0, vy: 0, facing: 1, grounded: true, layer: 'surface', climbing: false, swinging: false, invulnerable: 1.5, grabCooldown: 0 }
+  newPlayer(x = 108, invulnerable = 0): Player {
+    return { x, y: GROUND, vx: 0, vy: 0, facing: 1, grounded: true, layer: 'surface', climbing: false, swinging: false, invulnerable, grabCooldown: 0 }
   }
 
   start() {
@@ -114,6 +123,8 @@ export class PitfallEngine {
     this.player = this.newPlayer(CAMP_START_X)
     this.deathTimer = 0
     this.lastJump = false
+    this.lastUp = false
+    this.tent = new TicTacToe()
     this.logContact = 0
     this.particles = []
     this.events = []
@@ -122,6 +133,19 @@ export class PitfallEngine {
 
   pause() { if (this.status === 'playing') this.status = 'paused' }
   resume() { if (this.status === 'paused') this.status = 'playing' }
+  // The expedition clock stops while Harry is inside; the jungle waits for him.
+  enterTent() {
+    if (this.status !== 'playing' || !atTentDoor(this.roomIndex, this.player)) return
+    this.status = 'tent'; this.player.vx = 0
+    if (this.tent.over) this.tent.reset()
+    this.events.push('tent')
+  }
+  leaveTent() {
+    if (this.status !== 'tent') return
+    // Harry steps back out facing the jungle; up must be released before he can go back in.
+    this.status = 'playing'; this.player.facing = 1; this.lastUp = true; this.lastJump = true
+    this.announce('Back to the expedition.', 2)
+  }
   announce(message: string, duration = 3) { this.message = message; this.messageTime = duration }
 
   // The vine hangs from a pivot far above the canopy, so its long, shallow arc keeps Harry
@@ -153,7 +177,11 @@ export class PitfallEngine {
   scorpionFacing() { return Math.cos(this.elapsed * 0.8 + this.room.seed) >= 0 ? 1 : -1 }
 
   update(seconds: number, input: Input) {
-    if (this.status !== 'playing') { this.lastJump = input.jump; return }
+    if (this.status === 'tent') this.tent.update(Math.max(0, Math.min(seconds, 0.1)))
+    if (this.status !== 'playing') { this.lastJump = input.jump; this.lastUp = input.up; return }
+    const pressedUp = input.up && !this.lastUp
+    this.lastUp = input.up
+    if (pressedUp && this.deathTimer <= 0 && atTentDoor(this.roomIndex, this.player)) { this.enterTent(); this.lastJump = input.jump; return }
     // Keep the expedition clock accurate when a frame stalls, while bounding physics.
     this.remaining = Math.max(0, this.remaining - Math.max(0, seconds))
     if (this.remaining <= 0) { this.status = 'over'; this.announce('The sun has set on this expedition.'); return }
@@ -180,7 +208,7 @@ export class PitfallEngine {
       this.deathTimer -= dt
       if (this.deathTimer <= 0) {
         if (this.lives <= 0) this.status = 'over'
-        else { this.player = this.newPlayer(this.roomIndex === 0 ? CAMP_START_X : 108); this.player.y = 90; this.player.grounded = false }
+        else { this.player = this.newPlayer(this.roomIndex === 0 ? CAMP_START_X : 108, 1.5); this.player.y = 90; this.player.grounded = false }
       }
       return
     }

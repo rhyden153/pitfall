@@ -1,70 +1,40 @@
 import { GROUND, HEIGHT, PIT_HALF_WIDTH, PitfallEngine, TUNNEL_TOP, UNDERGROUND, VINE_PIVOT_Y, WIDTH, type Treasure } from './engine'
 
-export type VisualMode = 'modern' | 'classic'
+// The tic-tac-toe board on the tent's table, in canvas coordinates (the page overlays its buttons here).
+export const BOARD = { x: 330, y: 90, cell: 100 } as const
 const TAU = Math.PI * 2
 const noise = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x) }
-// Classic mode snaps every pixel of its low-resolution frame to this palette, so anti-aliased edges
-// become solid blocks like the original. It holds the classic scenery and Harry's colours exactly,
-// plus a clustered set of the other sprite colours.
-// Classic Harry, 8 x 15 blocks of 3 x 3 (one classic pixel each), facing right. Frames are built
-// from a head, a torso/arms section, and legs. Lower-case letters are the far arm and leg, drawn a
-// shade darker so the swing of each limb reads clearly.
-const HARRY_COLORS: Record<string, string> = { H: '#34271d', S: '#e6b36f', s: '#d98a6a', G: '#9dbe56', g: '#799632', B: '#354771', N: '#26335a', D: '#d2af76', d: '#b49348' }
-const HARRY_HEAD = ['..HHHH..', '..HHHHH.', '..HSSH..', '..SSSSS.', '...SS...']
-const HARRY_ARMS = {
-  side: ['..GGGG..', '..GGGG..', '..GGGG..', '..GGGS..', '..BBBB..'],
-  // Near arm forward, far arm back.
-  forward: ['..GGGG..', '.gGGGGG.', 'ssGGGGSS', '..GGGG..', '..BBBB..'],
-  // Near arm back, far arm forward.
-  back: ['..GGGG..', '.GGGGGg.', 'SSGGGGss', '..GGGG..', '..BBBB..'],
-}
-const HARRY_REACH = ['.SHHHHS.', '.GHHHHG.', '.GHSSHG.', '..SSSSS.', '...SS...', '..GGGG..', '..GGGG..', '..GGGG..', '..GGGG..', '..BBBB..']
-const HARRY_LEGS = {
-  stand: ['...NB...', '...NB...', '...NB...', '...NB...', '...dDD..'],
-  // Stride with the near leg reaching forward, then passing with the far foot kicked up behind.
-  strideNear: ['..N..B..', '.N....B.', '.N.....B', 'N......B', 'd.....DD'],
-  passNear: ['..NNB...', '..N.B...', '.N..B...', 'dd..B...', '....DD..'],
-  strideFar: ['..B..N..', '.B....N.', '.B.....N', 'B......N', 'D.....dd'],
-  passFar: ['..BBN...', '..B.N...', '.B..N...', 'DD..N...', '....dd..'],
-  jump: ['..BBBB..', '.NN.BB..', '.N...B..', '.dd..DD.', '........'],
-  hang: ['...NB...', '...NB...', '....NB..', '....NB..', '....dDD.'],
-  climbA: ['..N..B..', '..N..B..', '..d..B..', '.....B..', '.....D..'],
-  climbB: ['..N..B..', '..N..B..', '..N..d..', '..N.....', '..D.....'],
-}
-// One run cycle: stride, pass, stride on the other leg, pass. Arms swing opposite the legs.
-const HARRY_RUN = [
-  [...HARRY_HEAD, ...HARRY_ARMS.back, ...HARRY_LEGS.strideNear],
-  [...HARRY_HEAD, ...HARRY_ARMS.side, ...HARRY_LEGS.passNear],
-  [...HARRY_HEAD, ...HARRY_ARMS.forward, ...HARRY_LEGS.strideFar],
-  [...HARRY_HEAD, ...HARRY_ARMS.side, ...HARRY_LEGS.passFar],
-]
 
-const CLASSIC_PALETTE = [
-  0x849d38, 0x476523, 0x254c24, 0x65502b, 0xa9af47, 0xb49348, 0xd1b05a, 0x252a22, 0x5c5137, 0x98804e,
-  0x34271d, 0xe6b36f, 0x9dbe56, 0x354771, 0xd2af76, 0x799632, 0xb5b25f, 0x26335a,
-  0x1a140c, 0x493f2d, 0x385e47, 0x8f3a2b, 0x52633d, 0x7a6234, 0x53785a, 0x6e6a5f, 0x697745, 0xb8553a,
-  0x6b8a61, 0xd66939, 0xbf882e, 0x96927f, 0x8f9e65, 0xd98a6a, 0xba9e65, 0x8fb894, 0xc2ba79, 0xaabfb5,
-  0xf4ae49, 0xcbc4a4, 0xe8c65a, 0xf5d474, 0xc6e5aa, 0xeed791, 0xdbe0cb, 0xffeaaf, 0xffffff,
-].map(c => [c >> 16, (c >> 8) & 255, c & 255] as const)
+// Treasure sprites, centred on (x, y). The field notes draw their treasure icons with this too.
+export function drawTreasure(ctx: CanvasRenderingContext2D, kind: Treasure, x: number, y: number) {
+  ctx.save(); ctx.translate(x, y)
+  if (kind === 'gold' || kind === 'silver') {
+    ctx.fillStyle = kind === 'gold' ? '#bf882e' : '#82928d'; ctx.beginPath(); ctx.moveTo(-23, 10); ctx.lineTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(23, 10); ctx.fill()
+    ctx.fillStyle = kind === 'gold' ? '#efcc68' : '#dbe0cb'; ctx.beginPath(); ctx.moveTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(13, 0); ctx.lineTo(-19, 0); ctx.fill()
+    ctx.fillStyle = kind === 'gold' ? '#e5ad43' : '#aabfb5'; ctx.fillRect(-19, 1, 34, 9)
+  } else if (kind === 'bag') {
+    ctx.fillStyle = '#d5b373'; ctx.beginPath(); ctx.moveTo(-9, -17); ctx.lineTo(9, -17); ctx.lineTo(5, -6); ctx.bezierCurveTo(29, 18, -28, 18, -5, -6); ctx.fill()
+    ctx.strokeStyle = '#765637'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-7, -5); ctx.lineTo(8, -5); ctx.stroke()
+    ctx.fillStyle = '#806435'; ctx.font = 'bold 15px serif'; ctx.textAlign = 'center'; ctx.fillText('$', 0, 9)
+  } else {
+    ctx.strokeStyle = '#e6b54d'; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(0, 3, 11, 12, 0, 0, TAU); ctx.stroke()
+    ctx.fillStyle = '#d8f2df'; ctx.beginPath(); ctx.moveTo(-13, -13); ctx.lineTo(-7, -21); ctx.lineTo(7, -21); ctx.lineTo(13, -13); ctx.lineTo(0, -2); ctx.fill()
+    ctx.strokeStyle = '#8db5a1'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-13, -13); ctx.lineTo(13, -13); ctx.moveTo(-7, -21); ctx.lineTo(0, -2); ctx.lineTo(7, -21); ctx.stroke()
+  }
+  ctx.restore()
+}
 
 export class JungleRenderer {
   canvas: HTMLCanvasElement
   ctx: CanvasRenderingContext2D
-  pixelCanvas: HTMLCanvasElement
-  pixelCtx: CanvasRenderingContext2D
-  paletteCache = new Map<number, number>()
   backdrop: HTMLCanvasElement
   backdropSeed = -1
-  mode: VisualMode = 'modern'
   reducedMotion = false
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.ctx = canvas.getContext('2d')!
-    this.pixelCanvas = document.createElement('canvas')
     this.backdrop = document.createElement('canvas')
-    this.pixelCanvas.width = 320; this.pixelCanvas.height = 160
-    this.pixelCtx = this.pixelCanvas.getContext('2d', { willReadFrequently: true })!
     this.resize()
   }
 
@@ -76,30 +46,31 @@ export class JungleRenderer {
   }
 
   draw(game: PitfallEngine, clock: number) {
-    const target = this.ctx
-    const classic = this.mode === 'classic'
-    const ctx = classic ? this.pixelCtx : target
-    const scale = classic ? 1 / 3 : this.canvas.width / WIDTH
+    const ctx = this.ctx
+    const scale = this.canvas.width / WIDTH
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     ctx.clearRect(0, 0, WIDTH, HEIGHT)
     const time = this.reducedMotion ? 0 : clock
-    if (classic) this.background(ctx, game, 0, true)
-    else {
-      if (this.backdropSeed !== game.room.seed) {
-        const backdropContext = this.backdrop.getContext('2d')!
-        backdropContext.setTransform(scale, 0, 0, scale, 0, 0)
-        this.background(backdropContext, game, 0, false)
-        this.backdropSeed = game.room.seed
-      }
-      ctx.drawImage(this.backdrop, 0, 0, WIDTH, HEIGHT)
-      this.motes(ctx, time)
+    if (game.status === 'tent') this.tableTop(ctx, game, time)
+    else this.jungle(ctx, game, time)
+  }
+
+  jungle(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
+    if (this.backdropSeed !== game.room.seed) {
+      const scale = this.canvas.width / WIDTH
+      const backdropContext = this.backdrop.getContext('2d')!
+      backdropContext.setTransform(scale, 0, 0, scale, 0, 0)
+      this.background(backdropContext, game)
+      this.backdropSeed = game.room.seed
     }
-    this.terrain(ctx, game, time, classic)
+    ctx.drawImage(this.backdrop, 0, 0, WIDTH, HEIGHT)
+    this.motes(ctx, time)
+    this.terrain(ctx, game, time)
     if (game.room.vine) {
       const end = game.vine()
       // The pivot is far above the screen; start drawing where the vine emerges from the canopy.
       const topY = 40, topX = 480 + (end.x - 480) * (topY - VINE_PIVOT_Y) / (end.y - VINE_PIVOT_Y)
-      ctx.lineCap = 'round'; ctx.strokeStyle = classic ? '#799632' : '#41522b'; ctx.lineWidth = 6
+      ctx.lineCap = 'round'; ctx.strokeStyle = '#41522b'; ctx.lineWidth = 6
       ctx.beginPath(); ctx.moveTo(topX, topY); ctx.lineTo(end.x, end.y); ctx.stroke()
       ctx.strokeStyle = '#b5b25f'; ctx.lineWidth = 2
       ctx.beginPath(); ctx.moveTo(topX - 1, topY); ctx.lineTo(end.x - 1, end.y); ctx.stroke()
@@ -108,73 +79,107 @@ export class JungleRenderer {
         this.leaf(ctx, topX + (end.x - topX) * f, topY + (end.y - topY) * f, i % 2 ? 0.5 : 2.8, 10, '#84964a')
       }
     }
-    if (game.roomIndex === 0) this.camp(ctx, time, classic)
-    for (const x of game.logs()) this.log(ctx, x, GROUND - 13, game.elapsed, classic)
+    if (game.roomIndex === 0) this.camp(ctx, time)
+    for (const x of game.logs()) this.log(ctx, x, GROUND - 13, game.elapsed)
     if (game.room.hazard === 'fire') this.fire(ctx, game.room.hazardX, GROUND, time)
     if (game.room.hazard === 'snake') this.snake(ctx, game.room.hazardX, GROUND, time, game.room.hazardX > 480 ? -1 : 1)
     if (game.room.treasure && !game.collected.has(game.roomIndex)) {
       const bob = Math.sin(time * 3) * 3
-      if (!classic) {
-        const glow = ctx.createRadialGradient(480, GROUND - 26, 0, 480, GROUND - 26, 56)
-        glow.addColorStop(0, '#f5d47455'); glow.addColorStop(1, '#f5d47400')
-        ctx.fillStyle = glow; ctx.fillRect(420, GROUND - 88, 120, 88)
-      }
-      this.treasure(ctx, game.room.treasure, 480, GROUND - 21 + bob)
+      const glow = ctx.createRadialGradient(480, GROUND - 26, 0, 480, GROUND - 26, 56)
+      glow.addColorStop(0, '#f5d47455'); glow.addColorStop(1, '#f5d47400')
+      ctx.fillStyle = glow; ctx.fillRect(420, GROUND - 88, 120, 88)
+      drawTreasure(ctx, game.room.treasure, 480, GROUND - 21 + bob)
       this.sparkle(ctx, 450, GROUND - 36 + bob, 4, '#ffeaaf')
       this.sparkle(ctx, 506, GROUND - 52 - bob, 3, '#ffeaaf')
     }
     if (!game.room.ladder) this.scorpion(ctx, game.scorpionX(), UNDERGROUND, time, game.scorpionFacing())
-    if (game.deathTimer <= 0 || Math.floor(game.deathTimer * 12) % 2 === 0) this.player(ctx, game, classic)
+    if (game.deathTimer <= 0 || Math.floor(game.deathTimer * 12) % 2 === 0) this.player(ctx, game)
     for (const p of game.particles) {
       ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 5, 5)
     }
     ctx.globalAlpha = 1
-    if (!classic) this.foreground(ctx, time)
-    if (classic) {
-      this.snapToPalette()
-      target.setTransform(1, 0, 0, 1, 0, 0)
-      target.imageSmoothingEnabled = false
-      target.drawImage(this.pixelCanvas, 0, 0, this.canvas.width, this.canvas.height)
-    }
+    this.foreground(ctx, time)
   }
 
-  // Replace each pixel of the classic frame with its nearest palette colour (cached per colour).
-  snapToPalette() {
-    const image = this.pixelCtx.getImageData(0, 0, this.pixelCanvas.width, this.pixelCanvas.height)
-    const pixels = new Uint32Array(image.data.buffer)
-    const cache = this.paletteCache
-    if (cache.size > 65536) cache.clear()
-    for (let i = 0; i < pixels.length; i++) {
-      const value = pixels[i]!
-      let snapped = cache.get(value)
-      if (snapped === undefined) {
-        const r = value & 255, g = (value >> 8) & 255, b = (value >> 16) & 255
-        let best = 0, bestDistance = Infinity
-        for (let j = 0; j < CLASSIC_PALETTE.length; j++) {
-          const [pr, pg, pb] = CLASSIC_PALETTE[j]!
-          const distance = (r - pr) ** 2 * 3 + (g - pg) ** 2 * 4 + (b - pb) ** 2 * 2
-          if (distance < bestDistance) { bestDistance = distance; best = j }
+  // Inside the tent, looking down on a camp table: canvas floor, a lantern, a map and a mug around
+  // a tic-tac-toe board cut into the tabletop. Harry's marks are red Xs; the jungle's are stones.
+  tableTop(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
+    const t = game.tent, { x: bx, y: by, cell } = BOARD, size = cell * 3
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    ctx.fillStyle = '#9d8a5c'; ctx.fillRect(0, 0, WIDTH, HEIGHT)
+    ctx.strokeStyle = '#85744c'; ctx.lineWidth = 2
+    for (let x = 40; x < WIDTH; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, HEIGHT); ctx.stroke() }
+    // Table: shadow, planks with grain, and a darker rim.
+    ctx.fillStyle = '#1f201440'; ctx.fillRect(196, 36, 588, 428)
+    ctx.fillStyle = '#7d5d34'; ctx.fillRect(180, 20, 600, 430)
+    for (let i = 0; i < 6; i++) {
+      const y = 28 + i * 70
+      ctx.fillStyle = i % 2 ? '#98804e' : '#a0854f'; ctx.fillRect(188, y, 584, 66)
+      ctx.strokeStyle = '#7d5d3455'; ctx.lineWidth = 1.5
+      for (let j = 0; j < 3; j++) { const gy = y + 14 + j * 18 + noise(i * 7 + j) * 6; ctx.beginPath(); ctx.moveTo(188, gy); ctx.bezierCurveTo(360, gy - 5, 560, gy + 6, 772, gy - 2); ctx.stroke() }
+    }
+    // Lantern from above: a warm pool of light, brass ring and glass chimney.
+    const flicker = Math.sin(time * 9) * 0.03
+    const glow = ctx.createRadialGradient(250, 90, 0, 250, 90, 190)
+    glow.addColorStop(0, `rgba(255, 205, 120, ${0.38 + flicker})`); glow.addColorStop(1, 'rgba(255, 205, 120, 0)')
+    ctx.fillStyle = glow; ctx.fillRect(60, 0, 380, 290)
+    ctx.fillStyle = '#6e6a5f'; ctx.beginPath(); ctx.arc(250, 90, 30, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#bf882e'; ctx.beginPath(); ctx.arc(250, 90, 24, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#f5d474'; ctx.beginPath(); ctx.arc(250, 90, 14, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#ffeaaf'; ctx.beginPath(); ctx.arc(250, 90, 6 + flicker * 40, 0, TAU); ctx.fill()
+    // Folded trail map, then a compass.
+    ctx.save(); ctx.translate(705, 130); ctx.rotate(0.18)
+    ctx.fillStyle = '#e8dcb0'; ctx.fillRect(-52, -70, 104, 140)
+    ctx.strokeStyle = '#b3a476'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -70); ctx.lineTo(0, 70); ctx.moveTo(-52, 0); ctx.lineTo(52, 0); ctx.stroke()
+    ctx.strokeStyle = '#8f3a2b'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.moveTo(-38, 52); ctx.bezierCurveTo(-10, 20, 30, 30, 20, -20); ctx.lineTo(34, -50); ctx.stroke(); ctx.setLineDash([])
+    ctx.strokeStyle = '#b8553a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(28, -56); ctx.lineTo(40, -44); ctx.moveTo(40, -56); ctx.lineTo(28, -44); ctx.stroke()
+    ctx.restore()
+    ctx.fillStyle = '#5b4527'; ctx.beginPath(); ctx.arc(700, 360, 26, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#dbe0cb'; ctx.beginPath(); ctx.arc(700, 360, 20, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#b8553a'; ctx.beginPath(); ctx.moveTo(700, 343); ctx.lineTo(705, 360); ctx.lineTo(695, 360); ctx.fill()
+    ctx.fillStyle = '#34271d'; ctx.beginPath(); ctx.moveTo(700, 377); ctx.lineTo(705, 360); ctx.lineTo(695, 360); ctx.fill()
+    // Tin mug of coffee.
+    ctx.fillStyle = '#96927f'; ctx.fillRect(268, 372, 14, 8)
+    ctx.fillStyle = '#cbc4a4'; ctx.beginPath(); ctx.arc(250, 376, 22, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#493f2d'; ctx.beginPath(); ctx.arc(250, 376, 16, 0, TAU); ctx.fill()
+    // The board: an inset panel and grooves, then the cursor, marks and winning line.
+    ctx.fillStyle = '#5a4124'; ctx.fillRect(bx - 18, by - 18, size + 36, size + 36)
+    ctx.fillStyle = '#d1b05a'; ctx.fillRect(bx - 12, by - 12, size + 24, size + 24)
+    ctx.strokeStyle = '#65502b'; ctx.lineWidth = 8
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(bx + i * cell, by + 8); ctx.lineTo(bx + i * cell, by + size - 8)
+      ctx.moveTo(bx + 8, by + i * cell); ctx.lineTo(bx + size - 8, by + i * cell); ctx.stroke()
+    }
+    const centre = (i: number) => [bx + (i % 3) * cell + cell / 2, by + Math.floor(i / 3) * cell + cell / 2] as const
+    if (!t.over && t.turn === 'X') {
+      const [cx, cy] = centre(t.cursor)
+      ctx.strokeStyle = '#fffaf0'; ctx.lineWidth = 4; ctx.setLineDash([12, 8]); ctx.lineDashOffset = -time * 20
+      ctx.strokeRect(cx - cell / 2 + 12, cy - cell / 2 + 12, cell - 24, cell - 24); ctx.setLineDash([])
+    }
+    t.board.forEach((mark, i) => {
+      const [cx, cy] = centre(i)
+      if (mark === 'X') {
+        for (const [color, width] of [['#8f3a2b', 13], ['#b8553a', 7]] as const) {
+          ctx.strokeStyle = color; ctx.lineWidth = width
+          ctx.beginPath(); ctx.moveTo(cx - 26, cy - 26); ctx.lineTo(cx + 26, cy + 26); ctx.moveTo(cx + 26, cy - 26); ctx.lineTo(cx - 26, cy + 26); ctx.stroke()
         }
-        const [pr, pg, pb] = CLASSIC_PALETTE[best]!
-        snapped = (0xff000000 | (pb << 16) | (pg << 8) | pr) >>> 0
-        cache.set(value, snapped)
+      } else if (mark === 'O') {
+        ctx.fillStyle = '#1f201440'; ctx.beginPath(); ctx.arc(cx + 4, cy + 5, 30, 0, TAU); ctx.fill()
+        ctx.fillStyle = '#6e6a5f'; ctx.beginPath(); ctx.arc(cx, cy, 30, 0, TAU); ctx.fill()
+        ctx.fillStyle = '#96927f'; ctx.beginPath(); ctx.arc(cx - 3, cy - 3, 24, 0, TAU); ctx.fill()
+        ctx.fillStyle = '#cbc4a4'; ctx.beginPath(); ctx.ellipse(cx - 10, cy - 11, 8, 5, -0.6, 0, TAU); ctx.fill()
       }
-      pixels[i] = snapped
+    })
+    if (t.line) {
+      const [x1, y1] = centre(t.line[0]!), [x2, y2] = centre(t.line[2]!)
+      const ex = (x2 - x1) * 0.18, ey = (y2 - y1) * 0.18
+      ctx.strokeStyle = t.outcome === 'X' ? '#f5d474' : '#34271d'; ctx.lineWidth = 9
+      ctx.beginPath(); ctx.moveTo(x1 - ex, y1 - ey); ctx.lineTo(x2 + ex, y2 + ey); ctx.stroke()
     }
-    this.pixelCtx.putImageData(image, 0, 0)
+    ctx.restore()
   }
 
-  background(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number, classic: boolean) {
-    if (classic) {
-      ctx.fillStyle = '#849d38'; ctx.fillRect(0, 0, WIDTH, GROUND)
-      ctx.fillStyle = '#476523'; ctx.fillRect(0, 0, WIDTH, 75)
-      ctx.fillStyle = '#254c24'
-      for (let x = 0; x < WIDTH; x += 70) ctx.fillRect(x, 60, 48, 35)
-      ctx.fillStyle = '#65502b'
-      for (const x of [100, 265, 680, 840]) ctx.fillRect(x, 60, 20, 237)
-      ctx.fillStyle = '#a9af47'; ctx.fillRect(0, 285, WIDTH, GROUND - 285)
-      return
-    }
+  background(ctx: CanvasRenderingContext2D, game: PitfallEngine) {
     const sky = ctx.createLinearGradient(0, 0, 0, GROUND)
     sky.addColorStop(0, '#385e47'); sky.addColorStop(0.55, '#8f9e65'); sky.addColorStop(1, '#c2ba79')
     ctx.fillStyle = sky; ctx.fillRect(0, 0, WIDTH, GROUND)
@@ -230,32 +235,30 @@ export class JungleRenderer {
     ctx.globalAlpha = 1
   }
 
-  terrain(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number, classic: boolean) {
-    ctx.fillStyle = classic ? '#b49348' : '#aa8750'; ctx.fillRect(0, GROUND, WIDTH, TUNNEL_TOP - GROUND)
-    ctx.fillStyle = classic ? '#d1b05a' : '#d0b47a'; ctx.fillRect(0, GROUND, WIDTH, 7)
-    ctx.fillStyle = classic ? '#252a22' : '#292d24'; ctx.fillRect(0, TUNNEL_TOP, WIDTH, UNDERGROUND - TUNNEL_TOP)
+  terrain(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
+    ctx.fillStyle = '#aa8750'; ctx.fillRect(0, GROUND, WIDTH, TUNNEL_TOP - GROUND)
+    ctx.fillStyle = '#d0b47a'; ctx.fillRect(0, GROUND, WIDTH, 7)
+    ctx.fillStyle = '#292d24'; ctx.fillRect(0, TUNNEL_TOP, WIDTH, UNDERGROUND - TUNNEL_TOP)
     ctx.fillStyle = '#5c5137'; ctx.fillRect(0, UNDERGROUND, WIDTH, HEIGHT - UNDERGROUND)
     ctx.fillStyle = '#98804e'; ctx.fillRect(0, UNDERGROUND, WIDTH, 5)
-    if (!classic) {
-      for (let i = 0; i < 90; i++) {
-        const x = noise(i) * WIDTH
-        const y = GROUND + 10 + noise(i + 11) * (TUNNEL_TOP - GROUND - 14)
-        ctx.fillStyle = i % 2 ? '#755d3966' : '#d4b87c66'; ctx.fillRect(x, y, 4 + noise(i + 55) * 13, 2)
-      }
-      ctx.fillStyle = '#55472d'
-      for (let i = 0; i < 34; i++) {
-        const x = i * 31
-        ctx.beginPath(); ctx.moveTo(x, TUNNEL_TOP - 1); ctx.lineTo(x + 9, TUNNEL_TOP + 3 + noise(i) * 7); ctx.lineTo(x + 16, TUNNEL_TOP - 1); ctx.fill()
-      }
-      const cave = ctx.createLinearGradient(0, TUNNEL_TOP, 0, UNDERGROUND)
-      cave.addColorStop(0, '#121d1988'); cave.addColorStop(1, '#172b1a00'); ctx.fillStyle = cave; ctx.fillRect(0, TUNNEL_TOP, WIDTH, UNDERGROUND - TUNNEL_TOP)
-      for (let i = 0; i < 45; i++) {
-        ctx.fillStyle = i % 2 ? '#756140' : '#493f2d'; ctx.fillRect(noise(i + 1) * WIDTH, UNDERGROUND + 8 + noise(i) * (HEIGHT - UNDERGROUND - 11), 7, 3)
-      }
+    for (let i = 0; i < 90; i++) {
+      const x = noise(i) * WIDTH
+      const y = GROUND + 10 + noise(i + 11) * (TUNNEL_TOP - GROUND - 14)
+      ctx.fillStyle = i % 2 ? '#755d3966' : '#d4b87c66'; ctx.fillRect(x, y, 4 + noise(i + 55) * 13, 2)
+    }
+    ctx.fillStyle = '#55472d'
+    for (let i = 0; i < 34; i++) {
+      const x = i * 31
+      ctx.beginPath(); ctx.moveTo(x, TUNNEL_TOP - 1); ctx.lineTo(x + 9, TUNNEL_TOP + 3 + noise(i) * 7); ctx.lineTo(x + 16, TUNNEL_TOP - 1); ctx.fill()
+    }
+    const cave = ctx.createLinearGradient(0, TUNNEL_TOP, 0, UNDERGROUND)
+    cave.addColorStop(0, '#121d1988'); cave.addColorStop(1, '#172b1a00'); ctx.fillStyle = cave; ctx.fillRect(0, TUNNEL_TOP, WIDTH, UNDERGROUND - TUNNEL_TOP)
+    for (let i = 0; i < 45; i++) {
+      ctx.fillStyle = i % 2 ? '#756140' : '#493f2d'; ctx.fillRect(noise(i + 1) * WIDTH, UNDERGROUND + 8 + noise(i) * (HEIGHT - UNDERGROUND - 11), 7, 3)
     }
     if (game.room.ladder) {
       ctx.fillStyle = '#242c20'; ctx.fillRect(456, GROUND, 48, TUNNEL_TOP - GROUND + 7)
-      ctx.strokeStyle = classic ? '#c0a65d' : '#ba9e65'; ctx.lineWidth = 5
+      ctx.strokeStyle = '#ba9e65'; ctx.lineWidth = 5
       ctx.beginPath(); ctx.moveTo(462, GROUND + 4); ctx.lineTo(462, UNDERGROUND); ctx.moveTo(498, GROUND + 4); ctx.lineTo(498, UNDERGROUND)
       for (let y = GROUND + 13; y < UNDERGROUND; y += 16) { ctx.moveTo(462, y); ctx.lineTo(498, y) }
       ctx.stroke()
@@ -271,10 +274,9 @@ export class JungleRenderer {
     if (pit) {
       const water = game.room.pit === 'water'
       const sand = game.room.pit === 'sand'
-      this.pit(ctx, pit.left, pit.right, water ? 'water' : sand ? 'sand' : 'tar', time, classic, game.room.seed)
+      this.pit(ctx, pit.left, pit.right, water ? 'water' : sand ? 'sand' : 'tar', time, game.room.seed)
       if (water) for (const croc of game.crocodiles()) this.crocodile(ctx, croc.x, GROUND, croc.open)
     }
-    if (classic) return
     ctx.fillStyle = '#cbc4a477'; ctx.font = '10px monospace'; ctx.textAlign = 'left'
     ctx.fillText('UNDERGROUND  /  1 PASSAGE = 3 SCENES', 24, TUNNEL_TOP + 44)
     if (game.room.ladder) { ctx.textAlign = 'center'; ctx.fillStyle = '#ddd0a488'; ctx.fillText('↓', 480, 299) }
@@ -282,7 +284,7 @@ export class JungleRenderer {
 
   // A rounded opening in the ground seen at a slight angle. The basin itself stays hidden underground,
   // so the ground in front of the opening is plain dirt.
-  pit(ctx: CanvasRenderingContext2D, left: number, right: number, kind: 'water' | 'sand' | 'tar', time: number, classic = false, seed = 0) {
+  pit(ctx: CanvasRenderingContext2D, left: number, right: number, kind: 'water' | 'sand' | 'tar', time: number, seed = 0) {
     const palette = {
       water: { wall: '#5f5034', near: '#5d8a6c', far: '#2f5140', ripple: '#8fb89455' },
       sand: { wall: '#7a6234', near: '#b89a5a', far: '#846a3c', ripple: '#f0d38a55' },
@@ -291,12 +293,6 @@ export class JungleRenderer {
     const cx = (left + right) / 2, rx = (right - left) / 2
     if (rx < 2) return
     const ry = Math.min(11, rx * 0.35), cy = GROUND + 4
-    // Classic mode draws a flat, solid opening; shading and ripples would only turn into pixel noise.
-    if (classic) {
-      ctx.fillStyle = kind === 'sand' ? palette.near : palette.far; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU); ctx.fill()
-      if (kind !== 'water' && rx > 30) this.bones(ctx, cx, cy + ry * 0.35, Math.min(1, rx / PIT_HALF_WIDTH), palette.far, true, seed)
-      return
-    }
     // Darkened, trampled earth around the back of the opening.
     ctx.fillStyle = '#3b2e1a2b'; ctx.beginPath(); ctx.ellipse(cx, cy - 1, rx + 7, ry + 3, 0, Math.PI, TAU); ctx.fill()
     // The far inner wall in shadow, with the surface filling the rest of the opening.
@@ -312,7 +308,7 @@ export class JungleRenderer {
     }
     if (kind !== 'sand') { ctx.fillStyle = '#ffffff1c'; ctx.beginPath(); ctx.ellipse(cx - rx * 0.3, cy + ry * 0.2, rx * 0.25, ry * 0.18, 0, 0, TAU); ctx.fill() }
     ctx.restore()
-    if (kind !== 'water' && rx > 30) this.bones(ctx, cx, cy + ry * 0.35, Math.min(1, rx / PIT_HALF_WIDTH), palette.far, false, seed)
+    if (kind !== 'water' && rx > 30) this.bones(ctx, cx, cy + ry * 0.35, Math.min(1, rx / PIT_HALF_WIDTH), palette.far, seed)
     // Only the far rim catches a shadow line; the near edge simply meets the dirt.
     ctx.strokeStyle = '#2d2414aa'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, Math.PI + 0.08, TAU - 0.08); ctx.stroke()
   }
@@ -321,9 +317,8 @@ export class JungleRenderer {
   // three or four pieces, their spots near the middle, and which way each one leans, so no two
   // pits look alike. Everything is clipped at the surface line so it looks like it is sinking in,
   // and it shrinks with a shifting pit.
-  bones(ctx: CanvasRenderingContext2D, cx: number, surface: number, s: number, sink: string, classic = false, seed = 0) {
-    // Classic mode drops outlines and highlights so each bone stays a clean, solid shape.
-    const bone = '#e6dcc0', edge = classic ? bone : '#7a6e55', hollow = '#2a2418', shine = '#fff6df'
+  bones(ctx: CanvasRenderingContext2D, cx: number, surface: number, s: number, sink: string, seed = 0) {
+    const bone = '#e6dcc0', edge = '#7a6e55', hollow = '#2a2418', shine = '#fff6df'
     const pick = (k: number) => noise(seed * 13.7 + k)
     const kinds = ['ribs', 'skull', 'femur', 'small', 'hand', 'horns', 'jaw', 'pelvis'] as const
     const order = kinds.map((kind, i) => ({ kind, r: pick(i) })).sort((a, b) => a.r - b.r).map(o => o.kind)
@@ -359,7 +354,7 @@ export class JungleRenderer {
         case 'skull': { // A human skull, half sunk and tilted.
           const y = surface - 3 * s
           blob(x, y, 9 * s, 8 * s, -0.2 * f)
-          if (!classic) { ctx.fillStyle = shine; ctx.beginPath(); ctx.ellipse(x - 3 * f * s, y - 4 * s, 3.5 * s, 2 * s, -0.4 * f, 0, TAU); ctx.fill() }
+          ctx.fillStyle = shine; ctx.beginPath(); ctx.ellipse(x - 3 * f * s, y - 4 * s, 3.5 * s, 2 * s, -0.4 * f, 0, TAU); ctx.fill()
           hole(x - 3.5 * s, y + 1 * s, 2.4 * s, 2.8 * s); hole(x + 3.5 * s, y + 0.5 * s, 2.4 * s, 2.8 * s)
           ctx.beginPath(); ctx.moveTo(x, y + 3 * s); ctx.lineTo(x - 1.2 * s, y + 5.5 * s); ctx.lineTo(x + 1.2 * s, y + 5.5 * s); ctx.fill()
           rings.push([x, 11]); break
@@ -400,7 +395,7 @@ export class JungleRenderer {
           for (let j = 1; j < 6; j++) {
             const t = j / 6, qx = (1 - t) ** 2 * (x - 10 * s) + 2 * (1 - t) * t * x + t ** 2 * (x + 10 * s)
             const qy = (1 - t) ** 2 * (surface - lift - 4 * f * s) + 2 * (1 - t) * t * (surface + 5 * s) + t ** 2 * (surface - lift + 4 * f * s)
-            ctx.fillStyle = classic ? bone : shine; ctx.fillRect(qx - 0.9 * s, qy - 3.4 * s, 1.8 * s, 2.2 * s)
+            ctx.fillStyle = shine; ctx.fillRect(qx - 0.9 * s, qy - 3.4 * s, 1.8 * s, 2.2 * s)
           }
           rings.push([x, 11]); break
         }
@@ -413,22 +408,19 @@ export class JungleRenderer {
       }
     })
     ctx.restore()
-    if (classic) return
     // A ring of disturbed surface where each piece goes under.
     ctx.strokeStyle = sink; ctx.lineWidth = 1
     for (const [x, w] of rings) { ctx.beginPath(); ctx.ellipse(x, surface + 1, w * s, 1.6, 0, 0, TAU); ctx.stroke() }
   }
 
   // Base camp in scene 001: pennant, tent, supplies, and a cooking fire, left of Harry's start.
-  camp(ctx: CanvasRenderingContext2D, time: number, classic = false) {
+  camp(ctx: CanvasRenderingContext2D, time: number) {
     const g = GROUND
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-    // Warm firelight pooled on the ground (modern only; translucent light becomes noise in classic).
-    if (!classic) {
-      const glow = ctx.createRadialGradient(200, g - 8, 0, 200, g - 8, 90)
-      glow.addColorStop(0, `rgba(255, 190, 90, ${0.28 + Math.sin(time * 9) * 0.04})`); glow.addColorStop(1, 'rgba(255, 190, 90, 0)')
-      ctx.fillStyle = glow; ctx.fillRect(110, g - 98, 180, 110)
-    }
+    // Warm firelight pooled on the ground.
+    const glow = ctx.createRadialGradient(200, g - 8, 0, 200, g - 8, 90)
+    glow.addColorStop(0, `rgba(255, 190, 90, ${0.28 + Math.sin(time * 9) * 0.04})`); glow.addColorStop(1, 'rgba(255, 190, 90, 0)')
+    ctx.fillStyle = glow; ctx.fillRect(110, g - 98, 180, 110)
     // Pennant on a pole.
     ctx.strokeStyle = '#5b4527'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(16, g); ctx.lineTo(16, g - 74); ctx.stroke()
     const wave = Math.sin(time * 3) * 3
@@ -436,7 +428,7 @@ export class JungleRenderer {
     ctx.fillStyle = '#e8c874'; ctx.beginPath(); ctx.arc(26, g - 65 + wave * 0.5, 2.5, 0, TAU); ctx.fill()
     // Tent: ground shadow, guy ropes, shaded side panel, and a lit front with an open flap.
     ctx.fillStyle = '#1f201433'; ctx.beginPath(); ctx.ellipse(82, g + 1, 62, 5, 0, 0, TAU); ctx.fill()
-    ctx.strokeStyle = classic ? '#cbc4a4' : '#d8cfae99'; ctx.lineWidth = classic ? 3 : 1
+    ctx.strokeStyle = '#d8cfae99'; ctx.lineWidth = 1
     ctx.beginPath(); ctx.moveTo(58, g - 52); ctx.lineTo(24, g); ctx.moveTo(104, g - 56); ctx.lineTo(146, g); ctx.stroke()
     ctx.fillStyle = '#6a5433'; for (const x of [24, 146]) ctx.fillRect(x - 1.5, g - 5, 3, 6)
     ctx.fillStyle = '#9d8a5c'; ctx.beginPath(); ctx.moveTo(58, g - 52); ctx.lineTo(104, g - 56); ctx.lineTo(72, g); ctx.lineTo(30, g); ctx.closePath(); ctx.fill()
@@ -476,7 +468,7 @@ export class JungleRenderer {
       ctx.fillStyle = i % 2 ? '#7c7a6c' : '#96927f'; ctx.beginPath(); ctx.ellipse(200 + Math.cos(a) * 13, g - 1 + Math.sin(a) * -1.5 + 1, 4, 3, 0, 0, TAU); ctx.fill()
     }
     // Smoke drifting up past the pot.
-    for (let i = 0; i < (classic ? 0 : 4); i++) {
+    for (let i = 0; i < 4; i++) {
       const life = (time * 0.35 + i / 4) % 1
       ctx.fillStyle = `rgba(215, 214, 200, ${0.22 * (1 - life)})`
       ctx.beginPath(); ctx.arc(203 + life * 14 + Math.sin(time + i) * 3, g - 34 - life * 60, 4 + life * 9, 0, TAU); ctx.fill()
@@ -513,27 +505,14 @@ export class JungleRenderer {
     ctx.fillStyle = vignette; ctx.fillRect(0, 0, WIDTH, HEIGHT)
   }
 
-  player(ctx: CanvasRenderingContext2D, game: PitfallEngine, classic: boolean) {
+  player(ctx: CanvasRenderingContext2D, game: PitfallEngine) {
     const p = game.player
     if (p.invulnerable > 0 && game.status === 'playing' && Math.floor(game.elapsed * 12) % 2) return
     const running = p.grounded && Math.abs(p.vx) > 1
     const stride = running ? Math.sin(game.elapsed * 19) : 0
-    if (classic) {
-      // Snap to the 3px classic grid so every block lands on exactly one classic pixel.
-      ctx.save(); ctx.translate(Math.round(p.x / 3) * 3, Math.round(p.y / 3) * 3); ctx.scale(p.facing, 1)
-      let rows: string[]
-      if (p.swinging) rows = [...HARRY_REACH, ...HARRY_LEGS.hang]
-      else if (p.climbing) rows = [...HARRY_REACH, ...(Math.sin(game.elapsed * 12) > 0 ? HARRY_LEGS.climbA : HARRY_LEGS.climbB)]
-      else if (!p.grounded) rows = [...HARRY_HEAD, ...HARRY_ARMS.forward, ...HARRY_LEGS.jump]
-      // Same cadence as the modern stride: one full cycle every 2π/19 seconds.
-      else if (running) rows = HARRY_RUN[Math.floor((((game.elapsed * 19) / TAU) % 1) * 4)]!
-      else rows = [...HARRY_HEAD, ...HARRY_ARMS.side, ...HARRY_LEGS.stand]
-      rows.forEach((row, y) => [...row].forEach((c, x) => { const color = HARRY_COLORS[c]; if (color) { ctx.fillStyle = color; ctx.fillRect(x * 3 - 12, y * 3 - 45, 3, 3) } }))
-      ctx.restore(); return
-    }
     ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.scale(p.facing, 1)
     if (p.grounded) { ctx.fillStyle = '#202c283a'; ctx.beginPath(); ctx.ellipse(0, 1, 19, 4, 0, 0, TAU); ctx.fill() }
-    // Modern Harry: jointed arms and legs (far side darker, behind the body), a shaded shirt with a
+    // Harry: jointed arms and legs (far side darker, behind the body), a shaded shirt with a
     // pack, belt and collar, a face with ear, brow and nose, and a banded pith helmet. Drawn facing
     // right; feet at y = 0 and the hat brim at about y = -45.
     const t = game.elapsed
@@ -628,15 +607,19 @@ export class JungleRenderer {
     ctx.restore()
   }
 
-  log(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, classic: boolean) {
+  log(ctx: CanvasRenderingContext2D, x: number, y: number, time: number) {
     ctx.fillStyle = '#44351e'; ctx.beginPath(); ctx.ellipse(x, y + 13, 23, 4, 0, 0, TAU); ctx.fill()
-    ctx.fillStyle = '#765230'; ctx.fillRect(x - 14, y - 12, 29, 25)
-    ctx.fillStyle = '#a47943'; ctx.fillRect(x - 12, y - 9, 26, 4)
-    ctx.fillStyle = '#503c26'; ctx.fillRect(x - 12, y + 6, 26, 3)
+    // Bark body: the far end is rounded with the same curve as the cut face on the right.
+    ctx.save(); ctx.beginPath(); ctx.moveTo(x + 12, y - 13); ctx.lineTo(x + 12, y + 13); ctx.lineTo(x - 12, y + 13)
+    ctx.ellipse(x - 12, y, 8, 13, 0, Math.PI / 2, Math.PI * 1.5); ctx.closePath()
+    ctx.fillStyle = '#765230'; ctx.fill(); ctx.clip()
+    ctx.fillStyle = '#a47943'; ctx.fillRect(x - 20, y - 9, 34, 4)
+    ctx.fillStyle = '#503c26'; ctx.fillRect(x - 20, y + 6, 34, 3)
+    ctx.restore()
     ctx.fillStyle = '#c69c5c'; ctx.beginPath(); ctx.ellipse(x + 12, y, 8, 13, 0, 0, TAU); ctx.fill()
     ctx.strokeStyle = '#795a33'; ctx.lineWidth = 2
     ctx.beginPath(); ctx.ellipse(x + 12, y, 4, 8, 0, 0, TAU); ctx.stroke()
-    if (!classic) { ctx.beginPath(); ctx.moveTo(x + 12, y); ctx.lineTo(x + 12 + Math.cos(-time * 7) * 6, y + Math.sin(-time * 7) * 10); ctx.stroke() }
+    ctx.beginPath(); ctx.moveTo(x + 12, y); ctx.lineTo(x + 12 + Math.cos(-time * 7) * 6, y + Math.sin(-time * 7) * 10); ctx.stroke()
   }
 
   crocodile(ctx: CanvasRenderingContext2D, x: number, y: number, open: boolean) {
@@ -767,24 +750,6 @@ export class JungleRenderer {
     }
     claw(dark, 3, 1.3)
     claw(light, 0, 0)
-    ctx.restore()
-  }
-
-  treasure(ctx: CanvasRenderingContext2D, kind: Treasure, x: number, y: number) {
-    ctx.save(); ctx.translate(x, y)
-    if (kind === 'gold' || kind === 'silver') {
-      ctx.fillStyle = kind === 'gold' ? '#bf882e' : '#82928d'; ctx.beginPath(); ctx.moveTo(-23, 10); ctx.lineTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(23, 10); ctx.fill()
-      ctx.fillStyle = kind === 'gold' ? '#efcc68' : '#dbe0cb'; ctx.beginPath(); ctx.moveTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(13, 0); ctx.lineTo(-19, 0); ctx.fill()
-      ctx.fillStyle = kind === 'gold' ? '#e5ad43' : '#aabfb5'; ctx.fillRect(-19, 1, 34, 9)
-    } else if (kind === 'bag') {
-      ctx.fillStyle = '#d5b373'; ctx.beginPath(); ctx.moveTo(-9, -17); ctx.lineTo(9, -17); ctx.lineTo(5, -6); ctx.bezierCurveTo(29, 18, -28, 18, -5, -6); ctx.fill()
-      ctx.strokeStyle = '#765637'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-7, -5); ctx.lineTo(8, -5); ctx.stroke()
-      ctx.fillStyle = '#806435'; ctx.font = 'bold 15px serif'; ctx.textAlign = 'center'; ctx.fillText('$', 0, 9)
-    } else {
-      ctx.strokeStyle = '#e6b54d'; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(0, 3, 11, 12, 0, 0, TAU); ctx.stroke()
-      ctx.fillStyle = '#d8f2df'; ctx.beginPath(); ctx.moveTo(-13, -13); ctx.lineTo(-7, -21); ctx.lineTo(7, -21); ctx.lineTo(13, -13); ctx.lineTo(0, -2); ctx.fill()
-      ctx.strokeStyle = '#8db5a1'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-13, -13); ctx.lineTo(13, -13); ctx.moveTo(-7, -21); ctx.lineTo(0, -2); ctx.lineTo(7, -21); ctx.stroke()
-    }
     ctx.restore()
   }
 

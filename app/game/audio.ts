@@ -19,7 +19,7 @@ export class JungleAudio {
     if (event === 'swing') return this.jungleYell()
     const notes: Record<Exclude<GameEvent, 'log' | 'hurt' | 'swing'>, number[]> = {
       jump: [220, 440], treasure: [523, 659, 784, 1047],
-      fall: [330, 165], win: [523, 659, 784, 1047, 784, 1047],
+      fall: [330, 165], tent: [392, 523], win: [523, 659, 784, 1047, 784, 1047],
     }
     notes[event].forEach((frequency, i) => this.tone(frequency, i * 0.075, 0.12, 0.035, 'square'))
   }

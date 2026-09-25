@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CAMP_EDGE_X, CAMP_TUNNEL_EDGE_X, createWorld, emptyInput, GROUND, HAZARD_REACH, LANDING_WIDTH, PIT_HALF_WIDTH, TUNNEL_TOP, UNDERGROUND, WIDTH, PitfallEngine, TREASURE_VALUES } from '../app/game/engine.ts'
+import { CAMP_EDGE_X, CAMP_TUNNEL_EDGE_X, TENT_DOOR_X, createWorld, emptyInput, GROUND, HAZARD_REACH, LANDING_WIDTH, PIT_HALF_WIDTH, TUNNEL_TOP, UNDERGROUND, WIDTH, PitfallEngine, TREASURE_VALUES } from '../app/game/engine.ts'
+import { COMPUTER_DELAY, TicTacToe } from '../app/game/tictactoe.ts'
 
 function running() { const game = new PitfallEngine(); game.start(); game.player.invulnerable = 0; return game }
 function advance(game, seconds, keys = {}) {
@@ -218,4 +219,40 @@ test('a running jump can grab, swing and land across a tar pit in either directi
     }
     assert.equal(caught, true); assert.equal(released, true); assert.equal(landed, true); assert.equal(game.lives, 3)
   }
+})
+test('Harry can walk through camp to the pennant, step into the tent with up, and back out', () => {
+  const game = running(); advance(game, 3, { left: true }); assert.equal(game.player.x, CAMP_EDGE_X)
+  game.player.x = TENT_DOOR_X; advance(game, 0.05, { up: true })
+  assert.equal(game.status, 'tent'); assert.ok(game.events.includes('tent'))
+  // The expedition clock and the jungle stand still while Harry is inside.
+  const remaining = game.remaining, elapsed = game.elapsed
+  advance(game, 2, { up: true, left: true }); assert.equal(game.remaining, remaining); assert.equal(game.elapsed, elapsed)
+  game.leaveTent(); assert.equal(game.status, 'playing')
+  // Still holding up doesn't send him straight back in; a fresh press does.
+  advance(game, 0.05, { up: true }); assert.equal(game.status, 'playing')
+  advance(game, 0.02); advance(game, 0.02, { up: true }); assert.equal(game.status, 'tent')
+})
+test('the tent is only entered from its doorway in base camp', () => {
+  const game = running(); game.player.x = TENT_DOOR_X + 40; advance(game, 0.05, { up: true }); assert.equal(game.status, 'playing')
+  game.roomIndex = 1; game.player.x = TENT_DOOR_X; advance(game, 0.02); advance(game, 0.05, { up: true }); assert.equal(game.status, 'playing')
+})
+test('tic-tac-toe: Harry moves first, the computer takes a random open square, and wins are tallied', () => {
+  const ttt = new TicTacToe(() => 0)
+  assert.equal(ttt.turn, 'X'); assert.ok(ttt.play(4)); assert.equal(ttt.play(0), false)
+  ttt.update(COMPUTER_DELAY / 2); assert.equal(ttt.board.filter(Boolean).length, 1)
+  ttt.update(COMPUTER_DELAY); assert.equal(ttt.board[0], 'O'); assert.equal(ttt.turn, 'X')
+  assert.equal(ttt.play(0), false)
+  ttt.play(3); ttt.update(1) // O takes 1, the lowest open square
+  ttt.play(5); assert.equal(ttt.outcome, 'X'); assert.deepEqual(ttt.line, [3, 4, 5]); assert.equal(ttt.wins, 1)
+  assert.equal(ttt.play(8), false); ttt.update(1); assert.equal(ttt.board[8], null)
+  ttt.reset(); assert.deepEqual(ttt.board, Array(9).fill(null)); assert.equal(ttt.wins, 1)
+})
+test('tic-tac-toe: computer wins and draws are recognised, and the cursor wraps', () => {
+  const ttt = new TicTacToe(() => 0)
+  for (const square of [8, 7, 5]) { ttt.play(square); ttt.update(1) } // O fills 0, 1, 2
+  assert.equal(ttt.outcome, 'O'); assert.equal(ttt.losses, 1)
+  const picks = [0, 0.2, 0, 0], draw = new TicTacToe(() => picks.shift())
+  for (const square of [0, 2, 3, 7, 8]) { draw.play(square); draw.update(1) } // O: 1, 4, 5, 6
+  assert.equal(draw.outcome, 'draw'); assert.equal(draw.draws, 1)
+  draw.cursor = 0; draw.moveCursor(-1, -1); assert.equal(draw.cursor, 8); draw.moveCursor(1, 0); assert.equal(draw.cursor, 6)
 })

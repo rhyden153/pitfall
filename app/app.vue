@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { emptyInput, PitfallEngine, type Input, type Status } from './game/engine'
-import { JungleRenderer, type VisualMode } from './game/renderer'
+import { atTentDoor, emptyInput, HEIGHT, PitfallEngine, WIDTH, type Input, type Status } from './game/engine'
+import { BOARD, JungleRenderer } from './game/renderer'
+import type { Mark, Outcome } from './game/tictactoe'
 import { JungleAudio } from './game/audio'
 
 useHead({ title: 'Pitfall! — The jungle is calling', meta: [{ name: 'description', content: 'An old-school jungle adventure, reimagined. Swing over pits, outsmart crocodiles, and collect 32 treasures in this free browser recreation of Pitfall!' }] })
@@ -27,25 +28,34 @@ const treasures = ref(0)
 const scene = ref(0)
 const sceneName = ref('Base camp')
 const message = ref('Your next great adventure starts here.')
-const mode = ref<VisualMode>('modern')
 const muted = ref(false)
 const modal = ref<'guide' | 'map' | null>(null)
 const visited = ref<number[]>([0])
 const found = ref<number[]>([])
 const fullscreenError = ref('')
+const board = ref<(Mark | null)[]>(Array(9).fill(null))
+const outcome = ref<Outcome>(null)
+const tally = ref({ wins: 0, losses: 0, draws: 0 })
+// The tent's board buttons sit exactly over the squares drawn on the canvas.
+const boardStyle = { left: `${BOARD.x / WIDTH * 100}%`, top: `${BOARD.y / HEIGHT * 100}%`, width: `${BOARD.cell * 3 / WIDTH * 100}%`, height: `${BOARD.cell * 3 / HEIGHT * 100}%` }
 let resumeAfterDialog = false
 let returnFocus: HTMLElement | null = null
 const clock = computed(() => `${Math.floor(Math.ceil(remaining.value) / 60).toString().padStart(2, '0')}:${(Math.ceil(remaining.value) % 60).toString().padStart(2, '0')}`)
 const paused = computed(() => status.value === 'paused')
+const inTent = computed(() => status.value === 'tent')
 const ended = computed(() => status.value === 'over' || status.value === 'won')
-const treasureTypes = [{ kind: 'bag', name: 'Money bag', value: '2,000' }, { kind: 'silver', name: 'Silver bar', value: '3,000' }, { kind: 'gold', name: 'Gold bar', value: '4,000' }, { kind: 'ring', name: 'Diamond ring', value: '5,000' }]
+const treasureTypes = [{ kind: 'bag', name: 'Money bag', value: '2,000' }, { kind: 'silver', name: 'Silver bar', value: '3,000' }, { kind: 'gold', name: 'Gold bar', value: '4,000' }, { kind: 'ring', name: 'Diamond ring', value: '5,000' }] as const
 const keyActions: Record<string, keyof Input> = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Space: 'jump', KeyZ: 'jump' }
 
 function sync() {
   status.value = game.status; score.value = game.score; remaining.value = game.remaining
   lives.value = game.lives; treasures.value = game.treasureCount; scene.value = game.roomIndex
-  sceneName.value = game.status === 'ready' ? 'Base camp' : game.room.name
-  message.value = game.status === 'ready' ? 'Your next great adventure starts here.' : game.messageTime > 0 ? game.message : game.player.layer === 'tunnel' ? 'Underground passages take you three scenes at a time.' : game.room.vine ? 'Jump toward the vine to grab it. Jump or ↓ to release.' : 'Keep exploring. Fortune favors the adventurous.'
+  sceneName.value = game.status === 'ready' ? 'Base camp' : game.status === 'tent' ? 'Harry’s tent' : game.room.name
+  const t = game.tent
+  board.value = [...t.board]; outcome.value = t.outcome; tally.value = { wins: t.wins, losses: t.losses, draws: t.draws }
+  message.value = game.status === 'ready' ? 'Your next great adventure starts here.'
+    : game.status === 'tent' ? (t.outcome === 'X' ? 'Three in a row! You beat the jungle.' : t.outcome === 'O' ? 'The jungle wins this one.' : t.outcome === 'draw' ? 'A draw. Nobody wins.' : t.turn === 'X' ? 'Your move: pick a square. Esc to leave the tent.' : 'The jungle is thinking…')
+    : game.messageTime > 0 ? game.message : atTentDoor(game.roomIndex, game.player) ? 'Press ↑ to step inside the tent.' : game.player.layer === 'tunnel' ? 'Underground passages take you three scenes at a time.' : game.room.vine ? 'Jump toward the vine to grab it. Jump or ↓ to release.' : 'Keep exploring. Fortune favors the adventurous.'
   if (game.score > best.value && game.status !== 'ready') {
     best.value = game.score
     try { localStorage.setItem('pitfall-best', String(best.value)) } catch { /* Storage is optional. */ }
@@ -59,6 +69,24 @@ function rebuildInput() {
 }
 function clearInput() { keyboard.clear(); pointers.clear(); input = emptyInput() }
 function start() { clearInput(); sound.unlock(); game.start(); previousTime = 0; sync(); canvas.value?.focus({ preventScroll: true }) }
+function playSquare(square: number) {
+  game.tent.cursor = square
+  if (game.tent.play(square)) sound.play('jump')
+  sync()
+}
+function playAgain() { game.tent.reset(); sync(); focusGame() }
+function leaveTent() { game.leaveTent(); clearInput(); previousTime = 0; sync(); focusGame() }
+// In the tent the arrows move the board cursor, Space/Enter marks a square and Escape steps outside.
+function tentKey(event: KeyboardEvent) {
+  const t = game.tent
+  const moves: Record<string, [number, number]> = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] }
+  const move = moves[event.code]
+  if (move) { event.preventDefault(); t.moveCursor(...move) }
+  else if (event.code === 'Space' || event.code === 'Enter' || event.code === 'KeyZ') { event.preventDefault(); if (event.repeat) return; if (t.over) playAgain(); else playSquare(t.cursor) }
+  else if (event.code === 'Escape' && !event.repeat) { event.preventDefault(); leaveTent() }
+  else if (event.code === 'KeyM' && !event.repeat) toggleSound()
+  sync()
+}
 function togglePause() {
   if (modal.value) return
   if (game.status === 'playing') game.pause()
@@ -66,11 +94,10 @@ function togglePause() {
   clearInput(); sync()
 }
 function savePreferences() {
-  try { localStorage.setItem('pitfall-preferences', JSON.stringify({ mode: mode.value, muted: muted.value })) } catch { /* Storage is optional. */ }
+  try { localStorage.setItem('pitfall-preferences', JSON.stringify({ muted: muted.value })) } catch { /* Storage is optional. */ }
 }
 // Hand focus back to the game so Space/Enter don't re-trigger the toolbar button.
 function focusGame() { canvas.value?.focus({ preventScroll: true }) }
-function setMode(value: VisualMode) { mode.value = value; if (renderer) renderer.mode = value; savePreferences(); focusGame() }
 function toggleSound() { muted.value = !muted.value; sound.enabled = !muted.value; sound.unlock(); savePreferences(); focusGame() }
 async function toggleFullscreen() {
   try {
@@ -98,9 +125,12 @@ function keydown(event: KeyboardEvent) {
   if (modal.value || event.ctrlKey || event.altKey || event.metaKey) return
   const target = event.target as HTMLElement
   if (target.closest('button, a, input, select, textarea') && (event.code === 'Space' || event.code === 'Enter')) return
+  if (game.status === 'tent') { tentKey(event); return }
   if (keyActions[event.code]) {
     event.preventDefault()
     if (game.status === 'ready' && (event.code === 'Space' || event.code === 'KeyZ')) { start(); return }
+    // Enter the tent on the keypress itself, so a tap quicker than a frame still counts.
+    if (!event.repeat && (event.code === 'ArrowUp' || event.code === 'KeyW') && game.deathTimer <= 0 && atTentDoor(game.roomIndex, game.player)) { game.enterTent(); clearInput(); sync(); return }
     keyboard.add(event.code); rebuildInput(); sound.unlock()
   }
   if (!event.repeat && (event.code === 'KeyP' || event.code === 'Escape')) { event.preventDefault(); togglePause() }
@@ -131,11 +161,11 @@ onMounted(() => {
   try {
     best.value = Math.max(0, Number(localStorage.getItem('pitfall-best')) || 0)
     const prefs = JSON.parse(localStorage.getItem('pitfall-preferences') || '{}')
-    mode.value = prefs.mode === 'classic' ? 'classic' : 'modern'; muted.value = prefs.muted === true
+    muted.value = prefs.muted === true
   } catch { /* Defaults work when browser storage is disabled. */ }
   sound.enabled = !muted.value
   renderer = new JungleRenderer(canvas.value!)
-  renderer.mode = mode.value; renderer.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+  renderer.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
   window.addEventListener('keydown', keydown); window.addEventListener('keyup', keyup)
   window.addEventListener('blur', blur); window.addEventListener('resize', resize)
   document.addEventListener('visibilitychange', visibility)
@@ -169,10 +199,8 @@ onBeforeUnmount(() => {
 
       <section ref="cabinet" class="game-cabinet" aria-label="Pitfall jungle adventure">
         <div class="game-toolbar">
-          <div class="expedition-label"><span class="status-dot" /><span>THE EXPEDITION</span><span class="session-label">{{ status === 'ready' ? 'READY WHEN YOU ARE' : paused ? 'TAKING A BREATHER' : ended ? 'EXPEDITION COMPLETE' : 'IN PROGRESS' }}</span></div>
+          <div class="expedition-label"><span class="status-dot" /><span>THE EXPEDITION</span><span class="session-label">{{ status === 'ready' ? 'READY WHEN YOU ARE' : paused ? 'TAKING A BREATHER' : inTent ? 'RESTING IN CAMP' : ended ? 'EXPEDITION COMPLETE' : 'IN PROGRESS' }}</span></div>
           <div class="toolbar-actions">
-            <div class="mode-switch" aria-label="Graphics mode"><button :aria-pressed="mode === 'modern'" :class="{ active: mode === 'modern' }" @click="setMode('modern')">Modern</button><button :aria-pressed="mode === 'classic'" :class="{ active: mode === 'classic' }" @click="setMode('classic')">Classic</button></div>
-            <span class="toolbar-divider" />
             <button class="icon-button" :aria-label="muted ? 'Enable sound' : 'Mute sound'" :aria-pressed="muted" :title="muted ? 'Enable sound (M)' : 'Mute sound (M)'" @click="toggleSound"><ArcadeIcon :name="muted ? 'mute' : 'sound'" :size="18" /></button>
             <button class="icon-button fullscreen-button" aria-label="Toggle fullscreen" title="Fullscreen" @click="toggleFullscreen"><ArcadeIcon name="expand" :size="18" /></button>
           </div>
@@ -187,16 +215,23 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="canvas-stage">
-          <canvas ref="canvas" width="960" height="480" tabindex="0" :class="{ classic: mode === 'classic' }" aria-label="Pitfall game. Move with arrow keys or WASD. Space to jump, up and down to climb. P to pause." />
+          <canvas ref="canvas" width="960" height="480" tabindex="0" aria-label="Pitfall game. Move with arrow keys or WASD. Space to jump, up and down to climb. P to pause." />
           <div class="scene-stamp"><span class="scene-number">{{ status === 'ready' ? '001' : (scene + 1).toString().padStart(3, '0') }}</span><span>{{ sceneName }}</span></div>
           <div v-if="status === 'ready'" class="start-overlay">
             <div class="start-card"><div class="start-eyebrow"><span /> INTO THE WILD <span /></div><h2>Fortune favors<br />the adventurous.</h2><p>Leap. Swing. Explore.<br />Your 20-minute adventure starts now.</p><button class="start-button" @click="start">Start expedition <ArcadeIcon name="arrow" :size="19" /></button><div class="start-shortcut">or press <kbd>SPACE</kbd> to begin</div></div>
           </div>
           <div v-else-if="paused && !modal" class="pause-overlay"><div class="pause-card"><ArcadeIcon name="compass" :size="36" /><span class="eyebrow">TAKE A BREATHER</span><h2>Even explorers<br />need a moment.</h2><p>Your adventure will be right here.</p><button class="start-button" @click="togglePause">Keep exploring <ArcadeIcon name="play" :size="16" /></button><button class="quiet-button" @click="start">Start a new expedition</button></div></div>
+          <div v-else-if="inTent" class="tent-overlay">
+            <div class="tent-tally" aria-label="Tic-tac-toe record"><span>HARRY <strong>{{ tally.wins }}</strong></span><span>JUNGLE <strong>{{ tally.losses }}</strong></span><span>DRAWS <strong>{{ tally.draws }}</strong></span></div>
+            <div class="tent-board" :style="boardStyle" role="grid" aria-label="Tic-tac-toe board. You are X.">
+              <button v-for="(mark, i) in board" :key="i" :disabled="!!mark || !!outcome" :aria-label="`Row ${Math.floor(i / 3) + 1}, column ${i % 3 + 1}: ${mark ?? 'empty'}`" @click="playSquare(i)" />
+            </div>
+            <div class="tent-actions"><button v-if="outcome" class="start-button" @click="playAgain">Play again <ArcadeIcon name="restart" :size="15" /></button><button class="start-button leave-button" @click="leaveTent">Back to the jungle <ArcadeIcon name="arrow" :size="15" /></button></div>
+          </div>
           <div v-else-if="ended" class="pause-overlay"><div class="pause-card"><ArcadeIcon :name="status === 'won' ? 'flag' : 'compass'" :size="35" /><span class="eyebrow">{{ status === 'won' ? 'EVERY TREASURE. ONE LEGEND.' : 'UNTIL THE NEXT ADVENTURE' }}</span><h2>{{ status === 'won' ? 'A jungle legend.' : 'What a journey.' }}</h2><p>{{ treasures }} of 32 treasures found · {{ score.toLocaleString() }} points</p><button class="start-button" @click="start">Explore again <ArcadeIcon name="restart" :size="17" /></button></div></div>
         </div>
 
-        <div class="game-status"><div class="location-label"><ArcadeIcon name="compass" :size="15" /><span>{{ message }}</span></div><div class="status-actions"><button @click="openModal('map')"><ArcadeIcon name="map" :size="15" /><span>Trail map</span></button><button :disabled="status === 'ready' || ended" :aria-label="paused ? 'Resume expedition' : 'Pause expedition'" @click="togglePause"><ArcadeIcon :name="paused ? 'play' : 'pause'" :size="15" /><span>{{ paused ? 'Resume' : 'Pause' }}</span><kbd>P</kbd></button></div></div>
+        <div class="game-status"><div class="location-label"><ArcadeIcon name="compass" :size="15" /><span>{{ message }}</span></div><div class="status-actions"><button @click="openModal('map')"><ArcadeIcon name="map" :size="15" /><span>Trail map</span></button><button :disabled="status === 'ready' || ended || inTent" :aria-label="paused ? 'Resume expedition' : 'Pause expedition'" @click="togglePause"><ArcadeIcon :name="paused ? 'play' : 'pause'" :size="15" /><span>{{ paused ? 'Resume' : 'Pause' }}</span><kbd>P</kbd></button></div></div>
         <div class="touch-controls" aria-label="Touch game controls">
           <div class="touch-directions"><button aria-label="Move left" @pointerdown="touchDown($event, 'left')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">←</button><div class="touch-vertical"><button aria-label="Climb up" @pointerdown="touchDown($event, 'up')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">↑</button><button aria-label="Climb down or release vine" @pointerdown="touchDown($event, 'down')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">↓</button></div><button aria-label="Move right" @pointerdown="touchDown($event, 'right')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">→</button></div>
           <button class="touch-jump" aria-label="Jump or release vine" @pointerdown="touchDown($event, 'jump')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">JUMP <span>↗</span></button>
