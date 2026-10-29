@@ -26,3 +26,10 @@
 .idol-score strong{color:#e4c47c}.idol-tally{display:none;margin-left:5px;color:#e4c47c}
 @media(max-width:650px){.idol-score{display:none}.idol-tally{display:inline}}
 @media(max-width:400px){.idol-word{display:none}.treasure-score .score-label{position:relative}.idol-tally{position:absolute;left:100%;margin-left:4px}}
+
+/* Wide screens: the field notes sit in a column to the right of the game cabinet. */
+@media(min-width:1100px){.play-area{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:34px;align-items:start;margin-bottom:31px}.play-area .field-notes{grid-template-columns:1fr;gap:0;margin:0}.play-area .field-notes article{padding:0 0 22px}.play-area .field-notes article+article{border-left:0;border-top:1px solid var(--line);padding:22px 0}.play-area .treasure-list{display:grid;grid-template-columns:1fr 1fr;row-gap:14px}}
+@media(min-width:1450px){.site-shell{max-width:1384px}.play-area{grid-template-columns:minmax(0,1fr) 270px}}
+/* The tagline and the expedition tag share one line below the game. */
+.hero-description{display:flex;align-items:center;justify-content:center;gap:9px 22px;white-space:nowrap;align-self:auto;width:auto;margin:0 0 30px;padding:0}.hero-description>p{margin:0}.expedition-tag{display:flex}.expedition-tag>svg{display:inline}
+@media(max-width:820px){.hero-description{flex-wrap:wrap;white-space:normal;text-align:center;margin:0 0 24px}}

@@ -244,72 +244,69 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="site-shell">
-    <header class="site-header">
-      <a class="arcade-brand" href="/" aria-label="Pitfall home"><span class="brand-mark"><ArcadeIcon name="compass" :size="24" /></span> FIELDWORK <span class="brand-arcade">ARCADE</span></a>
-      <div class="header-caption"><span class="status-dot" /> OLD SCHOOL. NEW ADVENTURE.</div>
-      <nav class="header-links" aria-label="Main navigation"><button class="guide-link" @click="openModal('scores')"><ArcadeIcon name="trophy" :size="17" /> High scores</button><button class="guide-link" @click="openModal('guide')"><ArcadeIcon name="book" :size="17" /> Field guide <span>↗</span></button></nav>
-    </header>
-
     <main>
       <section class="hero" aria-labelledby="page-title">
         <div class="hero-title">
           <div class="eyebrow"><span class="edition-line" /> EST. 1982 <span class="eyebrow-slash">/</span> REIMAGINED</div>
-          <h1 id="page-title">PITFALL<span>!</span><svg class="title-leaf" viewBox="0 0 58 60" fill="none" aria-hidden="true"><path d="M9 54C20 36 25 15 50 6 56 34 41 49 20 45" fill="#71804c" /><path d="M9 55 44 16M24 39l-2-16m11 5 13-1" stroke="#f3f0e7" stroke-width="2" /></svg></h1>
+          <h1 id="page-title">NEO<span>/</span>PITFALL<svg class="title-leaf" viewBox="0 0 58 60" fill="none" aria-hidden="true"><path d="M9 54C20 36 25 15 50 6 56 34 41 49 20 45" fill="#71804c" /><path d="M9 55 44 16M24 39l-2-16m11 5 13-1" stroke="#f3f0e7" stroke-width="2" /></svg></h1>
           <p class="hero-subtitle">The jungle is calling.</p>
-        </div>
-        <div class="hero-description"><p>A little courage. A well-timed leap.<br />A whole jungle of possibility.</p><div class="expedition-tag"><ArcadeIcon name="flag" :size="15" /> 32 TREASURES <span>·</span> 20 MINUTES <span>·</span> 3 LIVES</div></div>
+        </div>        
+        <nav class="header-links" aria-label="Main navigation"><button class="guide-link" @click="openModal('scores')"><ArcadeIcon name="trophy" :size="17" /> High scores</button><button class="guide-link" @click="openModal('guide')"><ArcadeIcon name="book" :size="17" /> Field guide <span>↗</span></button></nav>
       </section>
 
-      <section ref="cabinet" class="game-cabinet" aria-label="Pitfall jungle adventure">
-        <div class="game-toolbar">
-          <div class="expedition-label"><span class="status-dot" /><span>THE EXPEDITION</span><span class="session-label">{{ status === 'ready' ? 'READY WHEN YOU ARE' : paused ? 'TAKING A BREATHER' : inTent ? 'RESTING IN CAMP' : ended ? 'EXPEDITION COMPLETE' : 'IN PROGRESS' }}</span></div>
-          <div class="toolbar-actions">
-            <button class="icon-button" :aria-label="muted ? 'Enable sound' : 'Mute sound'" :aria-pressed="muted" :title="muted ? 'Enable sound (M)' : 'Mute sound (M)'" @click="toggleSound"><ArcadeIcon :name="muted ? 'mute' : 'sound'" :size="18" /></button>
-            <button class="icon-button fullscreen-button" aria-label="Toggle fullscreen" aria-keyshortcuts="F" title="Fullscreen (F)" @click="toggleFullscreen"><ArcadeIcon name="expand" :size="18" /></button>
-          </div>
-        </div>
-
-        <div class="scoreboard">
-          <div class="score-item main-score"><span class="score-label">SCORE</span><strong>{{ score.toString().padStart(6, '0') }}</strong></div>
-          <div class="score-item best-score"><span class="score-label">PERSONAL BEST</span><strong>{{ best.toString().padStart(6, '0') }}</strong></div>
-          <div class="score-item time-score" :class="{ urgent: remaining < 60 }"><span class="score-label"><ArcadeIcon name="clock" :size="11" /> TIME LEFT</span><strong>{{ clock }}</strong></div>
-          <div class="score-item treasure-score"><span class="score-label">TREASURES<span v-if="idols" class="idol-tally" :title="`${idols} golden ${idols === 1 ? 'idol' : 'idols'}`">+{{ idols }}<span class="idol-word"> {{ idols === 1 ? 'IDOL' : 'IDOLS' }}</span></span></span><strong>{{ treasures.toString().padStart(2, '0') }} <small>/ 32</small></strong></div>
-          <div class="score-item idol-score"><span class="score-label">IDOLS</span><strong>{{ idols }} <small>/ {{ cavernTotal }}</small></strong></div>
-          <div class="score-item lives-score"><span class="score-label">LIVES</span><span class="hearts"><ArcadeIcon v-for="n in 3" :key="n" name="heart" :size="18" :class="{ lost: n > lives }" /></span></div>
-        </div>
-
-        <div class="canvas-stage">
-          <canvas ref="canvas" width="960" height="480" tabindex="0" aria-label="Pitfall game. Move with arrow keys or WASD. Space to jump, up and down to climb or swim. P to pause." />
-          <div class="scene-stamp"><span class="scene-number">{{ status === 'ready' ? '001' : (scene + 1).toString().padStart(3, '0') }}</span><span>{{ sceneName }}</span></div>
-          <div v-if="status === 'ready'" class="start-overlay">
-            <div class="start-card"><div class="start-eyebrow"><span /> INTO THE WILD <span /></div><h2>Fortune favors<br />the adventurous.</h2><p>Leap. Swing. Explore.<br />Your 20-minute adventure starts now.</p><button class="start-button" @click="start">Start expedition <ArcadeIcon name="arrow" :size="19" /></button><div class="start-shortcut">or press <kbd>SPACE</kbd> to begin</div></div>
-          </div>
-          <div v-else-if="paused && !modal" class="pause-overlay"><div class="pause-card"><ArcadeIcon name="compass" :size="36" /><span class="eyebrow">TAKE A BREATHER</span><h2>Even explorers<br />need a moment.</h2><p>Your adventure will be right here.</p><button class="start-button" @click="togglePause">Keep exploring <ArcadeIcon name="play" :size="16" /></button><button class="quiet-button" @click="start">Start a new expedition</button></div></div>
-          <div v-else-if="inTent" class="tent-overlay">
-            <div class="tent-tally" aria-label="Tic-tac-toe record"><span>HARRY <strong>{{ tally.wins }}</strong></span><span>JUNGLE <strong>{{ tally.losses }}</strong></span><span>DRAWS <strong>{{ tally.draws }}</strong></span></div>
-            <div class="tent-board" :style="boardStyle" role="grid" aria-label="Tic-tac-toe board. You are X.">
-              <button v-for="(mark, i) in board" :key="i" :disabled="!!mark || !!outcome" :aria-label="`Row ${Math.floor(i / 3) + 1}, column ${i % 3 + 1}: ${mark ?? 'empty'}`" @click="playSquare(i)" />
+      <div class="play-area">
+        <section ref="cabinet" class="game-cabinet" aria-label="Pitfall jungle adventure">
+          <div class="game-toolbar">
+            <div class="expedition-label"><span class="status-dot" /><span>THE EXPEDITION</span><span class="session-label">{{ status === 'ready' ? 'READY WHEN YOU ARE' : paused ? 'TAKING A BREATHER' : inTent ? 'RESTING IN CAMP' : ended ? 'EXPEDITION COMPLETE' : 'IN PROGRESS' }}</span></div>
+            <div class="toolbar-actions">
+              <button class="icon-button" :aria-label="muted ? 'Enable sound' : 'Mute sound'" :aria-pressed="muted" :title="muted ? 'Enable sound (M)' : 'Mute sound (M)'" @click="toggleSound"><ArcadeIcon :name="muted ? 'mute' : 'sound'" :size="18" /></button>
+              <button class="icon-button fullscreen-button" aria-label="Toggle fullscreen" aria-keyshortcuts="F" title="Fullscreen (F)" @click="toggleFullscreen"><ArcadeIcon name="expand" :size="18" /></button>
             </div>
-            <div class="tent-actions"><button v-if="outcome" class="start-button" @click="playAgain">Play again <ArcadeIcon name="restart" :size="15" /></button><button class="start-button leave-button" @click="leaveTent">Back to the jungle <ArcadeIcon name="arrow" :size="15" /></button></div>
           </div>
-          <div v-else-if="ended" class="pause-overlay"><div class="pause-card" :class="{ signing: qualified.length && !placed }"><ArcadeIcon :name="qualified.length ? 'trophy' : status === 'won' ? 'flag' : 'compass'" :size="35" /><span class="eyebrow">{{ qualified.includes('allTime') ? 'ALL-TIME TOP 10' : qualified.length ? 'THIS WEEK’S TOP 10' : status === 'won' ? 'EVERY TREASURE. ONE LEGEND.' : 'UNTIL THE NEXT ADVENTURE' }}</span><h2>{{ qualified.length ? 'You made the board.' : status === 'won' ? 'A jungle legend.' : 'What a journey.' }}</h2><p>{{ treasures }} of 32 treasures found{{ idolText(idols) }} ·{{ score.toLocaleString() }} points</p>
-            <form v-if="qualified.length && !placed" class="initials-form" @submit.prevent="saveScore"><label for="initials">Sign the expedition log</label><div class="initials-row"><input id="initials" ref="initialsInput" :value="initials" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="initials-hint" @input="onInitials" /><button class="start-button" :disabled="savingScore">{{ savingScore ? 'Saving…' : 'Sign it' }} <ArcadeIcon name="arrow" :size="15" /></button></div><span id="initials-hint" class="initials-hint">Three letters</span><p v-if="saveError" class="initials-error" role="alert">{{ saveError }}</p><button type="button" class="quiet-button" @click="skipScore">Skip</button></form>
-            <template v-else><p v-if="placed" class="placed-ranks">{{ placedText || 'Score saved' }}</p><button class="start-button" @click="start">Explore again <ArcadeIcon name="restart" :size="17" /></button></template></div></div>
-        </div>
 
-        <div class="game-status"><div class="location-label"><ArcadeIcon name="compass" :size="15" /><span>{{ message }}</span></div><div class="status-actions"><button @click="openModal('map')"><ArcadeIcon name="map" :size="15" /><span>Trail map</span></button><button :disabled="status === 'ready' || ended || inTent" :aria-label="paused ? 'Resume expedition' : 'Pause expedition'" @click="togglePause"><ArcadeIcon :name="paused ? 'play' : 'pause'" :size="15" /><span>{{ paused ? 'Resume' : 'Pause' }}</span><kbd>P</kbd></button></div></div>
-        <div class="touch-controls" aria-label="Touch game controls">
-          <div class="touch-directions"><button aria-label="Move left" @pointerdown="touchDown($event, 'left')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">←</button><div class="touch-vertical"><button aria-label="Climb up" @pointerdown="touchDown($event, 'up')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">↑</button><button aria-label="Climb down or release vine" @pointerdown="touchDown($event, 'down')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">↓</button></div><button aria-label="Move right" @pointerdown="touchDown($event, 'right')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">→</button></div>
-          <button class="touch-jump" aria-label="Jump or release vine" @pointerdown="touchDown($event, 'jump')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">JUMP <span>↗</span></button>
-        </div>
-        <p v-if="fullscreenError" class="fullscreen-error" role="status">{{ fullscreenError }}</p>
-      </section>
+          <div class="scoreboard">
+            <div class="score-item main-score"><span class="score-label">SCORE</span><strong>{{ score.toString().padStart(6, '0') }}</strong></div>
+            <div class="score-item best-score"><span class="score-label">PERSONAL BEST</span><strong>{{ best.toString().padStart(6, '0') }}</strong></div>
+            <div class="score-item time-score" :class="{ urgent: remaining < 60 }"><span class="score-label"><ArcadeIcon name="clock" :size="11" /> TIME LEFT</span><strong>{{ clock }}</strong></div>
+            <div class="score-item treasure-score"><span class="score-label">TREASURES<span v-if="idols" class="idol-tally" :title="`${idols} golden ${idols === 1 ? 'idol' : 'idols'}`">+{{ idols }}<span class="idol-word"> {{ idols === 1 ? 'IDOL' : 'IDOLS' }}</span></span></span><strong>{{ treasures.toString().padStart(2, '0') }} <small>/ 32</small></strong></div>
+            <div class="score-item idol-score"><span class="score-label">IDOLS</span><strong>{{ idols }} <small>/ {{ cavernTotal }}</small></strong></div>
+            <div class="score-item lives-score"><span class="score-label">LIVES</span><span class="hearts"><ArcadeIcon v-for="n in 3" :key="n" name="heart" :size="18" :class="{ lost: n > lives }" /></span></div>
+          </div>
 
-      <section class="field-notes" aria-label="How to play">
-        <article class="controls-note"><div class="note-heading"><span class="note-number">01</span><h2>Know your moves.</h2></div><div class="control-row"><span class="key-group"><kbd>←</kbd><kbd>→</kbd><span class="or">/</span><kbd>A</kbd><kbd>D</kbd></span><span>Move</span></div><div class="control-row"><span class="key-group"><kbd class="wide-key">SPACE</kbd></span><span>Jump & grab a vine</span></div><div class="control-row"><span class="key-group"><kbd>↑</kbd><kbd>↓</kbd><span class="or">/</span><kbd>W</kbd><kbd>S</kbd></span><span>Climb · ↓ releases vine</span></div></article>
-        <article class="treasure-note"><div class="note-heading"><span class="note-number">02</span><h2>Make it worth the trip.</h2></div><div class="treasure-list"><div v-for="item in treasureTypes" :key="item.kind" class="treasure-item"><TreasureIcon :kind="item.kind" /><span>{{ item.name }}</span><strong>{{ item.value }} <small>PTS</small></strong></div></div></article>
-        <article class="tip-note"><div class="note-heading"><span class="note-number">03</span><h2>A word to the wise.</h2></div><p>Watch the jaws. Time the swing.<br />And remember: the quickest way<br class="desktop-break" /> through is sometimes underneath.</p><button class="text-link" @click="openModal('guide')">Read the field guide <span>↗</span></button></article>
-      </section>
+          <div class="canvas-stage">
+            <canvas ref="canvas" width="960" height="480" tabindex="0" aria-label="Pitfall game. Move with arrow keys or WASD. Space to jump, up and down to climb or swim. P to pause." />
+            <div class="scene-stamp"><span class="scene-number">{{ status === 'ready' ? '001' : (scene + 1).toString().padStart(3, '0') }}</span><span>{{ sceneName }}</span></div>
+            <div v-if="status === 'ready'" class="start-overlay">
+              <div class="start-card"><div class="start-eyebrow"><span /> INTO THE WILD <span /></div><h2>Fortune favors<br />the adventurous.</h2><p>Leap. Swing. Explore.<br />Your 20-minute adventure starts now.</p><button class="start-button" @click="start">Start expedition <ArcadeIcon name="arrow" :size="19" /></button><div class="start-shortcut">or press <kbd>SPACE</kbd> to begin</div></div>
+            </div>
+            <div v-else-if="paused && !modal" class="pause-overlay"><div class="pause-card"><ArcadeIcon name="compass" :size="36" /><span class="eyebrow">TAKE A BREATHER</span><h2>Even explorers<br />need a moment.</h2><p>Your adventure will be right here.</p><button class="start-button" @click="togglePause">Keep exploring <ArcadeIcon name="play" :size="16" /></button><button class="quiet-button" @click="start">Start a new expedition</button></div></div>
+            <div v-else-if="inTent" class="tent-overlay">
+              <div class="tent-tally" aria-label="Tic-tac-toe record"><span>HARRY <strong>{{ tally.wins }}</strong></span><span>JUNGLE <strong>{{ tally.losses }}</strong></span><span>DRAWS <strong>{{ tally.draws }}</strong></span></div>
+              <div class="tent-board" :style="boardStyle" role="grid" aria-label="Tic-tac-toe board. You are X.">
+                <button v-for="(mark, i) in board" :key="i" :disabled="!!mark || !!outcome" :aria-label="`Row ${Math.floor(i / 3) + 1}, column ${i % 3 + 1}: ${mark ?? 'empty'}`" @click="playSquare(i)" />
+              </div>
+              <div class="tent-actions"><button v-if="outcome" class="start-button" @click="playAgain">Play again <ArcadeIcon name="restart" :size="15" /></button><button class="start-button leave-button" @click="leaveTent">Back to the jungle <ArcadeIcon name="arrow" :size="15" /></button></div>
+            </div>
+            <div v-else-if="ended" class="pause-overlay"><div class="pause-card" :class="{ signing: qualified.length && !placed }"><ArcadeIcon :name="qualified.length ? 'trophy' : status === 'won' ? 'flag' : 'compass'" :size="35" /><span class="eyebrow">{{ qualified.includes('allTime') ? 'ALL-TIME TOP 10' : qualified.length ? 'THIS WEEK’S TOP 10' : status === 'won' ? 'EVERY TREASURE. ONE LEGEND.' : 'UNTIL THE NEXT ADVENTURE' }}</span><h2>{{ qualified.length ? 'You made the board.' : status === 'won' ? 'A jungle legend.' : 'What a journey.' }}</h2><p>{{ treasures }} of 32 treasures found{{ idolText(idols) }} ·{{ score.toLocaleString() }} points</p>
+              <form v-if="qualified.length && !placed" class="initials-form" @submit.prevent="saveScore"><label for="initials">Sign the expedition log</label><div class="initials-row"><input id="initials" ref="initialsInput" :value="initials" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="initials-hint" @input="onInitials" /><button class="start-button" :disabled="savingScore">{{ savingScore ? 'Saving…' : 'Sign it' }} <ArcadeIcon name="arrow" :size="15" /></button></div><span id="initials-hint" class="initials-hint">Three letters</span><p v-if="saveError" class="initials-error" role="alert">{{ saveError }}</p><button type="button" class="quiet-button" @click="skipScore">Skip</button></form>
+              <template v-else><p v-if="placed" class="placed-ranks">{{ placedText || 'Score saved' }}</p><button class="start-button" @click="start">Explore again <ArcadeIcon name="restart" :size="17" /></button></template></div></div>
+          </div>
+
+          <div class="game-status"><div class="location-label"><ArcadeIcon name="compass" :size="15" /><span>{{ message }}</span></div><div class="status-actions"><button @click="openModal('map')"><ArcadeIcon name="map" :size="15" /><span>Trail map</span></button><button :disabled="status === 'ready' || ended || inTent" :aria-label="paused ? 'Resume expedition' : 'Pause expedition'" @click="togglePause"><ArcadeIcon :name="paused ? 'play' : 'pause'" :size="15" /><span>{{ paused ? 'Resume' : 'Pause' }}</span><kbd>P</kbd></button></div></div>
+          <div class="touch-controls" aria-label="Touch game controls">
+            <div class="touch-directions"><button aria-label="Move left" @pointerdown="touchDown($event, 'left')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">←</button><div class="touch-vertical"><button aria-label="Climb up" @pointerdown="touchDown($event, 'up')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">↑</button><button aria-label="Climb down or release vine" @pointerdown="touchDown($event, 'down')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">↓</button></div><button aria-label="Move right" @pointerdown="touchDown($event, 'right')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">→</button></div>
+            <button class="touch-jump" aria-label="Jump or release vine" @pointerdown="touchDown($event, 'jump')" @pointerup="touchUp" @pointercancel="touchUp" @lostpointercapture="touchUp">JUMP <span>↗</span></button>
+          </div>
+          <p v-if="fullscreenError" class="fullscreen-error" role="status">{{ fullscreenError }}</p>
+        </section>
+
+        <section class="field-notes" aria-label="How to play">
+          <article class="controls-note"><div class="note-heading"><span class="note-number">01</span><h2>Know your moves.</h2></div><div class="control-row"><span class="key-group"><kbd>←</kbd><kbd>→</kbd><span class="or">/</span><kbd>A</kbd><kbd>D</kbd></span><span>Move</span></div><div class="control-row"><span class="key-group"><kbd class="wide-key">SPACE</kbd></span><span>Jump & grab a vine</span></div><div class="control-row"><span class="key-group"><kbd>↑</kbd><kbd>↓</kbd><span class="or">/</span><kbd>W</kbd><kbd>S</kbd></span><span>Climb · ↓ releases vine</span></div></article>
+          <article class="treasure-note"><div class="note-heading"><span class="note-number">02</span><h2>Make it worth the trip.</h2></div><div class="treasure-list"><div v-for="item in treasureTypes" :key="item.kind" class="treasure-item"><TreasureIcon :kind="item.kind" /><span>{{ item.name }}</span><strong>{{ item.value }} <small>PTS</small></strong></div></div></article>
+          <article class="tip-note"><div class="note-heading"><span class="note-number">03</span><h2>A word to the wise.</h2></div><p>Watch the jaws. Time the swing.<br />And remember: the quickest way<br class="desktop-break" /> through is sometimes underneath.</p><button class="text-link" @click="openModal('guide')">Read the field guide <span>↗</span></button></article>
+        </section>
+      </div>
+      <div class="hero-description"><p>A little courage, a well-timed leap, a whole jungle of possibilities.</p><div class="expedition-tag"><ArcadeIcon name="flag" :size="15" /> 32 TREASURES <span>·</span> 20 MINUTES <span>·</span> 3 LIVES</div></div>
       <NeoGamesBanner class="collection-section" />
       <footer class="site-footer"><span><ArcadeIcon name="leaf" :size="14" /> Made for the love of the adventure.</span><span>A tribute to David Crane’s 1982 classic. <span class="footer-divider">/</span> Unofficial fan recreation.</span></footer>
     </main>
