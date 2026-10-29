@@ -17,6 +17,7 @@ const paths: Record<string, string> = {
   restart: 'M3 10a9 9 0 1 1 2 8M3 3v7h7',
   leaf: 'M20 3C7 1 1 8 5 16s17 4 15-13ZM3 22 16 8',
   chevron: 'm9 5 7 7-7 7',
+  trophy: 'M7 4h10v5a5 5 0 0 1-10 0V4Zm0 2H3v1a4 4 0 0 0 4.5 4M17 6h4v1a4 4 0 0 1-4.5 4M12 14v4m-4 3h8',
 }
 </script>
 

@@ -29,7 +29,7 @@ const scene = ref(0)
 const sceneName = ref('Base camp')
 const message = ref('Your next great adventure starts here.')
 const muted = ref(false)
-const modal = ref<'guide' | 'map' | null>(null)
+const modal = ref<'guide' | 'map' | 'scores' | null>(null)
 const visited = ref<number[]>([0])
 const found = ref<number[]>([])
 const fullscreenError = ref('')
@@ -47,7 +47,50 @@ const ended = computed(() => status.value === 'over' || status.value === 'won')
 const treasureTypes = [{ kind: 'bag', name: 'Money bag', value: '2,000' }, { kind: 'silver', name: 'Silver bar', value: '3,000' }, { kind: 'gold', name: 'Gold bar', value: '4,000' }, { kind: 'ring', name: 'Diamond ring', value: '5,000' }] as const
 const keyActions: Record<string, keyof Input> = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Space: 'jump', KeyZ: 'jump' }
 
+const { boards: leaderboards, failed: leaderboardFailed, refresh: refreshLeaderboards, recordGame, submit: submitScore, savedInitials } = useLeaderboard()
+const scoreTabs = [
+  { id: 'weekly', label: 'This week', about: 'The ten best expeditions since Monday. The board resets every Monday at 00:00 UTC.' },
+  { id: 'allTime', label: 'All time', about: 'The ten best expeditions from explorers everywhere.' },
+] as const
+const scoreTab = ref<LeaderboardName>('weekly')
+const globalScores = computed(() => leaderboards.value?.[scoreTab.value] ?? [])
+const formatDate = (time: number) => new Date(time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+// Boards the last expedition qualified for, and where it placed once the initials were saved.
+const qualified = ref<LeaderboardName[]>([])
+const placed = ref<LeaderboardRanks | null>(null)
+const initials = ref('')
+const initialsInput = ref<HTMLInputElement | null>(null)
+const savingScore = ref(false)
+const saveError = ref('')
+const placedText = computed(() => [placed.value?.weekly && `#${placed.value.weekly} this week`, placed.value?.allTime && `#${placed.value.allTime} all time`].filter(Boolean).join(' · '))
+function onInitials(event: Event) {
+  const field = event.target as HTMLInputElement
+  initials.value = field.value = field.value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 3)
+}
+async function saveScore() {
+  if (initials.value.length !== 3) { saveError.value = 'Enter three letters.'; return }
+  savingScore.value = true; saveError.value = ''
+  try {
+    placed.value = await submitScore({ initials: initials.value, score: game.score, detail: game.status === 'won' ? 'All 32 treasures' : `${game.treasureCount} of 32 treasures` }, qualified.value)
+  } catch (error: any) {
+    saveError.value = error?.data?.statusMessage || 'Couldn’t reach the leaderboard. Try again.'
+  } finally { savingScore.value = false }
+}
+function skipScore() { qualified.value = []; focusGame() }
+function finishExpedition() {
+  const finalScore = game.score
+  void recordGame(finalScore).then(async (names) => {
+    // Ignore the result if a new expedition has already started.
+    if (!ended.value || game.score !== finalScore) return
+    qualified.value = names
+    if (!names.length) return
+    initials.value ||= savedInitials()
+    await nextTick(); initialsInput.value?.focus({ preventScroll: true })
+  })
+}
+
 function sync() {
+  if ((game.status === 'over' || game.status === 'won') && status.value !== game.status) finishExpedition()
   status.value = game.status; score.value = game.score; remaining.value = game.remaining
   lives.value = game.lives; treasures.value = game.treasureCount; scene.value = game.roomIndex
   sceneName.value = game.status === 'ready' ? 'Base camp' : game.status === 'tent' ? 'Harry’s tent' : game.room.name
@@ -68,7 +111,7 @@ function rebuildInput() {
   for (const action of pointers.values()) input[action] = true
 }
 function clearInput() { keyboard.clear(); pointers.clear(); input = emptyInput() }
-function start() { clearInput(); sound.unlock(); game.start(); previousTime = 0; sync(); canvas.value?.focus({ preventScroll: true }) }
+function start() { qualified.value = []; placed.value = null; saveError.value = ''; clearInput(); sound.unlock(); game.start(); previousTime = 0; sync(); canvas.value?.focus({ preventScroll: true }) }
 function playSquare(square: number) {
   game.tent.cursor = square
   if (game.tent.play(square)) sound.play('jump')
@@ -107,7 +150,8 @@ async function toggleFullscreen() {
   } catch { fullscreenError.value = 'Fullscreen is unavailable in this browser.' }
   focusGame()
 }
-async function openModal(type: 'guide' | 'map') {
+async function openModal(type: 'guide' | 'map' | 'scores') {
+  if (type === 'scores') void refreshLeaderboards()
   returnFocus = document.activeElement as HTMLElement
   resumeAfterDialog = game.status === 'playing'
   game.pause(); clearInput(); sync()
@@ -124,7 +168,9 @@ function onDialogClosed() {
 function keydown(event: KeyboardEvent) {
   if (modal.value || event.ctrlKey || event.altKey || event.metaKey) return
   const target = event.target as HTMLElement
-  if (target.closest('button, a, input, select, textarea') && (event.code === 'Space' || event.code === 'Enter')) return
+  // Typing initials shouldn't move Harry or toggle pause and sound.
+  if (target.isContentEditable || target.closest('input, select, textarea')) return
+  if (target.closest('button, a') && (event.code === 'Space' || event.code === 'Enter')) return
   if (game.status === 'tent') { tentKey(event); return }
   if (keyActions[event.code]) {
     event.preventDefault()
@@ -184,7 +230,7 @@ onBeforeUnmount(() => {
     <header class="site-header">
       <a class="arcade-brand" href="/" aria-label="Pitfall home"><span class="brand-mark"><ArcadeIcon name="compass" :size="24" /></span> FIELDWORK <span class="brand-arcade">ARCADE</span></a>
       <div class="header-caption"><span class="status-dot" /> OLD SCHOOL. NEW ADVENTURE.</div>
-      <button class="guide-link" @click="openModal('guide')"><ArcadeIcon name="book" :size="17" /> Field guide <span>↗</span></button>
+      <nav class="header-links" aria-label="Main navigation"><button class="guide-link" @click="openModal('scores')"><ArcadeIcon name="trophy" :size="17" /> High scores</button><button class="guide-link" @click="openModal('guide')"><ArcadeIcon name="book" :size="17" /> Field guide <span>↗</span></button></nav>
     </header>
 
     <main>
@@ -228,7 +274,9 @@ onBeforeUnmount(() => {
             </div>
             <div class="tent-actions"><button v-if="outcome" class="start-button" @click="playAgain">Play again <ArcadeIcon name="restart" :size="15" /></button><button class="start-button leave-button" @click="leaveTent">Back to the jungle <ArcadeIcon name="arrow" :size="15" /></button></div>
           </div>
-          <div v-else-if="ended" class="pause-overlay"><div class="pause-card"><ArcadeIcon :name="status === 'won' ? 'flag' : 'compass'" :size="35" /><span class="eyebrow">{{ status === 'won' ? 'EVERY TREASURE. ONE LEGEND.' : 'UNTIL THE NEXT ADVENTURE' }}</span><h2>{{ status === 'won' ? 'A jungle legend.' : 'What a journey.' }}</h2><p>{{ treasures }} of 32 treasures found · {{ score.toLocaleString() }} points</p><button class="start-button" @click="start">Explore again <ArcadeIcon name="restart" :size="17" /></button></div></div>
+          <div v-else-if="ended" class="pause-overlay"><div class="pause-card" :class="{ signing: qualified.length && !placed }"><ArcadeIcon :name="qualified.length ? 'trophy' : status === 'won' ? 'flag' : 'compass'" :size="35" /><span class="eyebrow">{{ qualified.includes('allTime') ? 'ALL-TIME TOP 10' : qualified.length ? 'THIS WEEK’S TOP 10' : status === 'won' ? 'EVERY TREASURE. ONE LEGEND.' : 'UNTIL THE NEXT ADVENTURE' }}</span><h2>{{ qualified.length ? 'You made the board.' : status === 'won' ? 'A jungle legend.' : 'What a journey.' }}</h2><p>{{ treasures }} of 32 treasures found · {{ score.toLocaleString() }} points</p>
+            <form v-if="qualified.length && !placed" class="initials-form" @submit.prevent="saveScore"><label for="initials">Sign the expedition log</label><div class="initials-row"><input id="initials" ref="initialsInput" :value="initials" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="initials-hint" @input="onInitials" /><button class="start-button" :disabled="savingScore">{{ savingScore ? 'Saving…' : 'Sign it' }} <ArcadeIcon name="arrow" :size="15" /></button></div><span id="initials-hint" class="initials-hint">Three letters</span><p v-if="saveError" class="initials-error" role="alert">{{ saveError }}</p><button type="button" class="quiet-button" @click="skipScore">Skip</button></form>
+            <template v-else><p v-if="placed" class="placed-ranks">{{ placedText || 'Score saved' }}</p><button class="start-button" @click="start">Explore again <ArcadeIcon name="restart" :size="17" /></button></template></div></div>
         </div>
 
         <div class="game-status"><div class="location-label"><ArcadeIcon name="compass" :size="15" /><span>{{ message }}</span></div><div class="status-actions"><button @click="openModal('map')"><ArcadeIcon name="map" :size="15" /><span>Trail map</span></button><button :disabled="status === 'ready' || ended || inTent" :aria-label="paused ? 'Resume expedition' : 'Pause expedition'" @click="togglePause"><ArcadeIcon :name="paused ? 'play' : 'pause'" :size="15" /><span>{{ paused ? 'Resume' : 'Pause' }}</span><kbd>P</kbd></button></div></div>
@@ -244,13 +292,19 @@ onBeforeUnmount(() => {
         <article class="treasure-note"><div class="note-heading"><span class="note-number">02</span><h2>Make it worth the trip.</h2></div><div class="treasure-list"><div v-for="item in treasureTypes" :key="item.kind" class="treasure-item"><TreasureIcon :kind="item.kind" /><span>{{ item.name }}</span><strong>{{ item.value }} <small>PTS</small></strong></div></div></article>
         <article class="tip-note"><div class="note-heading"><span class="note-number">03</span><h2>A word to the wise.</h2></div><p>Watch the jaws. Time the swing.<br />And remember: the quickest way<br class="desktop-break" /> through is sometimes underneath.</p><button class="text-link" @click="openModal('guide')">Read the field guide <span>↗</span></button></article>
       </section>
+      <NeoGamesBanner class="collection-section" />
       <footer class="site-footer"><span><ArcadeIcon name="leaf" :size="14" /> Made for the love of the adventure.</span><span>A tribute to David Crane’s 1982 classic. <span class="footer-divider">/</span> Unofficial fan recreation.</span></footer>
     </main>
 
     <dialog ref="dialog" class="field-dialog" @close="onDialogClosed" @click="(event) => { if (event.target === dialog) closeModal() }">
-      <div v-if="modal" class="dialog-inner"><button class="dialog-close icon-button" aria-label="Close dialog" autofocus @click="closeModal"><ArcadeIcon name="close" /></button><div class="eyebrow">THE EXPLORER’S COMPANION</div><h2>{{ modal === 'guide' ? 'Your field guide.' : 'Leave a trail.' }}</h2>
-        <template v-if="modal === 'guide'"><p class="dialog-intro">Find all 32 treasures before your 20 minutes or three lives run out. Each expedition begins with 2,000 points.</p><div class="guide-grid"><article><h3>Leap before you look down.</h3><p>Move with ← → or A / D. Press Space or Z to jump. Jump close to the end of a vine to grab it, then press jump again or ↓ to let go near the far bank.</p></article><article><h3>Take the low road.</h3><p>Use ↑ / ↓ or W / S at a ladder. Underground, every screen takes you three scenes along the surface. Watch for scorpions and dead-end walls.</p></article><article><h3>Respect the residents.</h3><p>Cross on crocodiles’ heads, behind the jaws, or on closed mouths. Snakes, fire, scorpions, swamps, and pits cost a life. Some pits open and close: patience pays.</p></article><article><h3>Protect your fortune.</h3><p>Logs drain points while touching you. Falling through a hole costs 100 points. Walk into treasure to collect it. There are eight of each kind, with 114,000 points for a perfect run.</p></article></div><div class="guide-footnote"><kbd>P</kbd> pause <span>·</span><kbd>M</kbd> sound <span>·</span> Switching tabs pauses the adventure.</div><p class="source-note">Inspired by the <a href="https://www.atariage.com/2600/manuals_old/pitfall.html" target="_blank" rel="noopener noreferrer">original instruction manual ↗</a>. A newly arranged 255-scene jungle with original artwork and sound.</p></template>
-        <template v-else><p class="dialog-intro">{{ visited.length }} of 255 scenes explored. Follow the surface one scene at a time, or cover three through an underground passage.</p><div class="map-legend"><span><i class="map-current" /> You are here</span><span><i class="map-visited" /> Explored</span><span><i class="map-treasure" /> Treasure collected</span></div><div class="trail-map"><div v-for="room in game.rooms" :key="room.id" :class="{ explored: visited.includes(room.id), current: room.id === scene, collected: found.includes(room.id) }" :title="`Scene ${room.id + 1}${visited.includes(room.id) ? `: ${room.name}` : ': Unexplored'}${found.includes(room.id) ? ' — treasure collected' : ''}`">{{ room.id + 1 }}</div></div><p class="source-note">The jungle loops back on itself. Your trail resets with each expedition.</p></template>
+      <div v-if="modal" class="dialog-inner"><button class="dialog-close icon-button" aria-label="Close dialog" autofocus @click="closeModal"><ArcadeIcon name="close" /></button><div class="eyebrow">{{ modal === 'scores' ? 'THE EXPEDITION LOG' : 'THE EXPLORER’S COMPANION' }}</div><h2>{{ modal === 'guide' ? 'Your field guide.' : modal === 'scores' ? 'Legends of the jungle.' : 'Leave a trail.' }}</h2>
+        <template v-if="modal === 'scores'"><div class="score-tabs" role="group" aria-label="Leaderboard"><button v-for="tab in scoreTabs" :key="tab.id" :class="{ selected: scoreTab === tab.id }" :aria-pressed="scoreTab === tab.id" @click="scoreTab = tab.id">{{ tab.label }}</button></div><p class="dialog-intro">{{ scoreTabs.find(tab => tab.id === scoreTab)?.about }}</p>
+          <div v-if="!leaderboards" class="empty-scores"><ArcadeIcon name="trophy" :size="30" /><h3>{{ leaderboardFailed ? 'Lost in the jungle.' : 'Checking the log…' }}</h3><p>{{ leaderboardFailed ? 'We couldn’t reach the leaderboard. Try again in a moment.' : 'Fetching the latest scores.' }}</p></div>
+          <div v-else-if="!globalScores.length" class="empty-scores"><ArcadeIcon name="trophy" :size="30" /><h3>The trail is wide open.</h3><p>Head into the jungle and claim the top spot.</p></div>
+          <ol v-else class="score-list"><li v-for="(entry, index) in globalScores" :key="`${entry.at}-${entry.initials}`"><span class="rank">{{ String(index + 1).padStart(2, '0') }}</span><span class="initials">{{ entry.initials }}</span><div><strong>{{ entry.score.toString().padStart(6, '0') }}</strong><small>{{ entry.detail }}</small></div><span class="score-date">{{ formatDate(entry.at) }}</span></li></ol>
+          <p class="source-note">Your personal best on this device: <strong>{{ best.toString().padStart(6, '0') }}</strong></p></template>
+        <template v-else-if="modal === 'guide'"><p class="dialog-intro">Find all 32 treasures before your 20 minutes or three lives run out. Each expedition begins with 2,000 points.</p><div class="guide-grid"><article><h3>Leap before you look down.</h3><p>Move with ← → or A / D. Press Space or Z to jump. Jump close to the end of a vine to grab it, then press jump again or ↓ to let go near the far bank.</p></article><article><h3>Take the low road.</h3><p>Use ↑ / ↓ or W / S at a ladder. Underground, every screen takes you three scenes along the surface. Watch for scorpions and dead-end walls.</p></article><article><h3>Respect the residents.</h3><p>Cross on crocodiles’ heads, behind the jaws, or on closed mouths. Snakes, fire, scorpions, swamps, and pits cost a life. Some pits open and close: patience pays.</p></article><article><h3>Protect your fortune.</h3><p>Logs drain points while touching you. Falling through a hole costs 100 points. Walk into treasure to collect it. There are eight of each kind, with 114,000 points for a perfect run.</p></article></div><div class="guide-footnote"><kbd>P</kbd> pause <span>·</span><kbd>M</kbd> sound <span>·</span> Switching tabs pauses the adventure.</div><p class="source-note">Inspired by the <a href="https://www.atariage.com/2600/manuals_old/pitfall.html" target="_blank" rel="noopener noreferrer">original instruction manual ↗</a>. A newly arranged 255-scene jungle with original artwork and sound.</p></template>
+        <template v-else-if="modal === 'map'"><p class="dialog-intro">{{ visited.length }} of 255 scenes explored. Follow the surface one scene at a time, or cover three through an underground passage.</p><div class="map-legend"><span><i class="map-current" /> You are here</span><span><i class="map-visited" /> Explored</span><span><i class="map-treasure" /> Treasure collected</span></div><div class="trail-map"><div v-for="room in game.rooms" :key="room.id" :class="{ explored: visited.includes(room.id), current: room.id === scene, collected: found.includes(room.id) }" :title="`Scene ${room.id + 1}${visited.includes(room.id) ? `: ${room.name}` : ': Unexplored'}${found.includes(room.id) ? ' — treasure collected' : ''}`">{{ room.id + 1 }}</div></div><p class="source-note">The jungle loops back on itself. Your trail resets with each expedition.</p></template>
       </div>
     </dialog>
   </div>
