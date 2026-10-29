@@ -316,7 +316,7 @@ export class JungleRenderer {
     // The tunnel's caption fades as the view scrolls down, clear of the scene stamp.
     ctx.globalAlpha = Math.max(0, 1 - this.camera / 60)
     ctx.fillStyle = '#cbc4a477'; ctx.font = '10px monospace'; ctx.textAlign = 'left'
-    ctx.fillText('UNDERGROUND  /  1 PASSAGE = 1 SCENE', 24, TUNNEL_TOP + 44)
+    ctx.fillText('UNDERGROUND  /  1 PASSAGE = 3 SCENES', 24, TUNNEL_TOP + 44)
     ctx.globalAlpha = 1
     if (game.room.ladder) { ctx.textAlign = 'center'; ctx.fillStyle = '#ddd0a488'; ctx.fillText('↓', 480, 299) }
   }

@@ -360,7 +360,8 @@ export class PitfallEngine {
     if (p.layer === 'cavern') p.x = Math.max(CAVERN_WALL + 12, Math.min(WIDTH - CAVERN_WALL - 12, p.x))
 
     if (p.x > WIDTH + 10 || p.x < -10) {
-      this.roomIndex = wrap(this.roomIndex + (p.x > WIDTH ? 1 : -1), 255)
+      const step = p.layer === 'tunnel' ? 3 : 1
+      this.roomIndex = wrap(this.roomIndex + (p.x > WIDTH ? step : -step), 255)
       this.roomEnteredAt = this.elapsed; this.logContact = 0
       p.x = p.x > WIDTH ? 4 : WIDTH - 4
       this.visited.add(this.roomIndex)

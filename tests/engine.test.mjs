@@ -45,13 +45,11 @@ test('Harry cannot walk left past base camp into scene 255, above or below groun
   game.player.layer = 'tunnel'; game.player.y = UNDERGROUND; advance(game, 2, { left: true })
   assert.equal(game.roomIndex, 0); assert.equal(game.player.x, CAMP_TUNNEL_EDGE_X)
 })
-test('underground travel moves one scene at a time and wraps', () => {
+test('underground travel skips exactly three scenes and wraps', () => {
   const game = running(); game.player.layer = 'tunnel'; game.player.y = UNDERGROUND; game.player.x = WIDTH + 9
-  advance(game, 0.02, { right: true }); assert.equal(game.roomIndex, 1)
-  game.roomIndex = 5; game.player.x = -9
-  advance(game, 0.02, { left: true }); assert.equal(game.roomIndex, 4)
-  game.roomIndex = 254; game.player.x = WIDTH + 9
-  advance(game, 0.02, { right: true }); assert.equal(game.roomIndex, 0)
+  advance(game, 0.02, { right: true }); assert.equal(game.roomIndex, 3)
+  game.roomIndex = 2; game.player.x = -9
+  advance(game, 0.02, { left: true }); assert.equal(game.roomIndex, 254)
 })
 test('a jump has an arc, clears obstacles, lands, and never auto-repeats', () => {
   const game = running()
@@ -273,6 +271,26 @@ test('eight caverns lie under tunnels without a surface ladder, the first one tu
   assert.deepEqual(caverns.map(r => r.cavern.idol), ['river', 'pillar', 'river', 'pillar', 'river', 'pillar', 'river', 'pillar'])
   assert.ok(caverns.some(r => r.cavern.flip) && caverns.some(r => !r.cavern.flip))
   assert.equal(caverns[0].id, 4); assert.ok(createWorld()[1].ladder)
+})
+test('every cavern is one tunnel screen west of the ladder three scenes east', () => {
+  for (const cave of createWorld().filter(r => r.cavern)) {
+    const game = running(); game.roomIndex = (cave.id + 3) % 255
+    assert.ok(game.room.ladder, `scene ${cave.id + 4} has a ladder`)
+    advance(game, 1, { down: true }); assert.equal(game.player.layer, 'tunnel')
+    // Walk west, jumping any pit in the tunnel floor, until Harry reaches the cavern's tunnel screen.
+    for (let t = 0; t < 20 && game.roomIndex !== cave.id; t += 1 / 120) {
+      const pit = game.room.tunnelPit, ahead = pit === null ? 0 : game.player.x - pit
+      advance(game, 1 / 120, { left: true, jump: ahead > 30 && ahead < 50 })
+    }
+    assert.equal(game.roomIndex, cave.id); assert.equal(game.lives, 3)
+    // Then climb down the nearer shaft.
+    const shaft = game.cavern().ladders.reduce((a, b) => Math.abs(a - game.player.x) < Math.abs(b - game.player.x) ? a : b)
+    for (let t = 0; t < 20 && game.player.layer === 'tunnel'; t += 1 / 120) {
+      const dx = shaft - game.player.x
+      advance(game, 1 / 120, Math.abs(dx) < 10 ? { down: true } : dx > 0 ? { right: true } : { left: true })
+    }
+    assert.equal(game.player.layer, 'cavern', `cavern under scene ${cave.id + 1}`)
+  }
 })
 test('mirrored caverns put the river on the right, with the ladders, chasm and idol mirrored too', () => {
   const plain = inCavern(c => !c.flip && c.idol === 'pillar').cavern(), mirrored = inCavern(c => c.flip && c.idol === 'pillar').cavern()
