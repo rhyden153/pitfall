@@ -1,4 +1,4 @@
-import { GROUND, HEIGHT, PIT_HALF_WIDTH, PitfallEngine, TUNNEL_TOP, UNDERGROUND, VINE_PIVOT_Y, WIDTH, type Treasure } from './engine'
+import { BREATH, CAVERN_FLOOR, CAVERN_TOP, CAVERN_VIEW, CAVERN_WALL, GROUND, HEIGHT, LOW_BREATH, PIT_HALF_WIDTH, PitfallEngine, RIVER_BED, TUNNEL_PIT_HALF, TUNNEL_TOP, UNDERGROUND, VINE_PIVOT_Y, WATER_SURFACE, WIDTH, type Loot } from './engine'
 
 // The tic-tac-toe board on the tent's table, in canvas coordinates (the page overlays its buttons here).
 export const BOARD = { x: 330, y: 90, cell: 100 } as const
@@ -6,9 +6,19 @@ const TAU = Math.PI * 2
 const noise = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x) }
 
 // Treasure sprites, centred on (x, y). The field notes draw their treasure icons with this too.
-export function drawTreasure(ctx: CanvasRenderingContext2D, kind: Treasure, x: number, y: number) {
+export function drawTreasure(ctx: CanvasRenderingContext2D, kind: Loot, x: number, y: number) {
   ctx.save(); ctx.translate(x, y)
-  if (kind === 'gold' || kind === 'silver') {
+  if (kind === 'idol') {
+    // A squat golden idol on a stepped base, with gem eyes and a crested headdress.
+    ctx.fillStyle = '#8f6420'; ctx.fillRect(-14, 12, 28, 5); ctx.fillStyle = '#a8792b'; ctx.fillRect(-11, 8, 22, 5)
+    ctx.fillStyle = '#c89436'; ctx.beginPath(); ctx.ellipse(0, 2, 10, 8, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#e5ad43'; ctx.beginPath(); ctx.ellipse(-8, 3, 3, 5, 0.3, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(8, 3, 3, 5, -0.3, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#efcc68'; ctx.beginPath(); ctx.roundRect(-10, -18, 20, 16, 5); ctx.fill()
+    ctx.fillStyle = '#bf882e'; ctx.beginPath(); ctx.moveTo(-12, -16); ctx.lineTo(-7, -25); ctx.lineTo(0, -19); ctx.lineTo(7, -25); ctx.lineTo(12, -16); ctx.closePath(); ctx.fill()
+    ctx.fillStyle = '#4fc3a8'; ctx.fillRect(-6, -13, 4, 3); ctx.fillRect(2, -13, 4, 3)
+    ctx.fillStyle = '#8f6420'; ctx.fillRect(-4, -7, 8, 2)
+    ctx.fillStyle = '#fff0b0'; ctx.fillRect(-8, -16, 3, 6)
+  } else if (kind === 'gold' || kind === 'silver') {
     ctx.fillStyle = kind === 'gold' ? '#bf882e' : '#82928d'; ctx.beginPath(); ctx.moveTo(-23, 10); ctx.lineTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(23, 10); ctx.fill()
     ctx.fillStyle = kind === 'gold' ? '#efcc68' : '#dbe0cb'; ctx.beginPath(); ctx.moveTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(13, 0); ctx.lineTo(-19, 0); ctx.fill()
     ctx.fillStyle = kind === 'gold' ? '#e5ad43' : '#aabfb5'; ctx.fillRect(-19, 1, 34, 9)
@@ -30,6 +40,9 @@ export class JungleRenderer {
   backdrop: HTMLCanvasElement
   backdropSeed = -1
   reducedMotion = false
+  // How far the view is scrolled down, easing toward the engine's viewY().
+  camera = 0
+  lastClock = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -51,8 +64,16 @@ export class JungleRenderer {
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     ctx.clearRect(0, 0, WIDTH, HEIGHT)
     const time = this.reducedMotion ? 0 : clock
-    if (game.status === 'tent') this.tableTop(ctx, game, time)
-    else this.jungle(ctx, game, time)
+    // The view glides down into a cavern and back up; reduced motion jumps straight there.
+    const target = game.status === 'tent' ? 0 : game.viewY()
+    const ease = 1 - Math.exp(-Math.max(0, Math.min(0.1, clock - this.lastClock)) * 8)
+    this.camera = this.reducedMotion || Math.abs(target - this.camera) < 0.5 ? target : this.camera + (target - this.camera) * ease
+    this.lastClock = clock
+    if (game.status === 'tent') { this.tableTop(ctx, game, time); return }
+    ctx.setTransform(scale, 0, 0, scale, 0, -Math.round(this.camera * scale))
+    this.jungle(ctx, game, time)
+    ctx.setTransform(scale, 0, 0, scale, 0, 0)
+    this.vignette(ctx)
   }
 
   jungle(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
@@ -66,6 +87,8 @@ export class JungleRenderer {
     ctx.drawImage(this.backdrop, 0, 0, WIDTH, HEIGHT)
     this.motes(ctx, time)
     this.terrain(ctx, game, time)
+    if (game.room.cavern) this.cavernBack(ctx, game, time)
+    else if (this.camera > 0) { ctx.fillStyle = '#4a4232'; ctx.fillRect(0, HEIGHT, WIDTH, CAVERN_VIEW) }
     if (game.room.vine) {
       const end = game.vine()
       // The pivot is far above the screen; start drawing where the vine emerges from the canopy.
@@ -94,6 +117,12 @@ export class JungleRenderer {
     }
     if (!game.room.ladder) this.scorpion(ctx, game.scorpionX(), UNDERGROUND, time, game.scorpionFacing())
     if (game.deathTimer <= 0 || Math.floor(game.deathTimer * 12) % 2 === 0) this.player(ctx, game)
+    if (game.room.cavern) this.cavernFront(ctx, game, time)
+    if (game.room.tunnelPit !== null) {
+      const x = game.room.tunnelPit, dark = ctx.createLinearGradient(0, UNDERGROUND, 0, HEIGHT)
+      dark.addColorStop(0, '#0b0f0c00'); dark.addColorStop(0.6, '#0b0f0c'); ctx.fillStyle = dark
+      ctx.fillRect(x - TUNNEL_PIT_HALF, UNDERGROUND, TUNNEL_PIT_HALF * 2, HEIGHT - UNDERGROUND)
+    }
     for (const p of game.particles) {
       ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 5, 5)
     }
@@ -270,6 +299,13 @@ export class JungleRenderer {
       ctx.fillStyle = '#746549'; ctx.fillRect(690, TUNNEL_TOP - 1, 20, UNDERGROUND - TUNNEL_TOP + 1)
       for (let y = TUNNEL_TOP - 1; y < UNDERGROUND; y += 12) { ctx.fillStyle = '#38392b'; ctx.fillRect(690, y, 20, 2) }
     }
+    if (game.room.tunnelPit !== null) {
+      // A black gap in the tunnel floor with crumbled lips; tunnelPitFront darkens Harry as he falls.
+      const x = game.room.tunnelPit, w = TUNNEL_PIT_HALF
+      ctx.fillStyle = '#0b0f0c'; ctx.fillRect(x - w, UNDERGROUND, w * 2, HEIGHT - UNDERGROUND)
+      ctx.fillStyle = '#6f5b37'; ctx.fillRect(x - w - 3, UNDERGROUND, 6, 9); ctx.fillRect(x + w - 3, UNDERGROUND, 6, 9)
+      ctx.fillStyle = '#98804e'; ctx.fillRect(x - w - 6, UNDERGROUND, 5, 3); ctx.fillRect(x + w + 1, UNDERGROUND, 5, 3)
+    }
     const pit = game.pitBounds()
     if (pit) {
       const water = game.room.pit === 'water'
@@ -277,8 +313,11 @@ export class JungleRenderer {
       this.pit(ctx, pit.left, pit.right, water ? 'water' : sand ? 'sand' : 'tar', time, game.room.seed)
       if (water) for (const croc of game.crocodiles()) this.crocodile(ctx, croc.x, GROUND, croc.open)
     }
+    // The tunnel's caption fades as the view scrolls down, clear of the scene stamp.
+    ctx.globalAlpha = Math.max(0, 1 - this.camera / 60)
     ctx.fillStyle = '#cbc4a477'; ctx.font = '10px monospace'; ctx.textAlign = 'left'
-    ctx.fillText('UNDERGROUND  /  1 PASSAGE = 3 SCENES', 24, TUNNEL_TOP + 44)
+    ctx.fillText('UNDERGROUND  /  1 PASSAGE = 1 SCENE', 24, TUNNEL_TOP + 44)
+    ctx.globalAlpha = 1
     if (game.room.ladder) { ctx.textAlign = 'center'; ctx.fillStyle = '#ddd0a488'; ctx.fillText('↓', 480, 299) }
   }
 
@@ -308,9 +347,10 @@ export class JungleRenderer {
     }
     if (kind !== 'sand') { ctx.fillStyle = '#ffffff1c'; ctx.beginPath(); ctx.ellipse(cx - rx * 0.3, cy + ry * 0.2, rx * 0.25, ry * 0.18, 0, 0, TAU); ctx.fill() }
     ctx.restore()
-    if (kind !== 'water' && rx > 30) this.bones(ctx, cx, cy + ry * 0.35, Math.min(1, rx / PIT_HALF_WIDTH), palette.far, seed)
     // Only the far rim catches a shadow line; the near edge simply meets the dirt.
     ctx.strokeStyle = '#2d2414aa'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, Math.PI + 0.08, TAU - 0.08); ctx.stroke()
+    // Bones go on last so they stand in front of the far rim.
+    if (kind !== 'water' && rx > 30) this.bones(ctx, cx, cy + ry * 0.35, Math.min(1, rx / PIT_HALF_WIDTH), palette.far, seed)
   }
 
   // Remains of less fortunate explorers poking out of tar or quicksand. Each scene's seed picks
@@ -476,6 +516,160 @@ export class JungleRenderer {
     ctx.restore()
   }
 
+  // A deep cavern below the tunnel floor: rock, glowing fungi, the river with its eels, the ledges,
+  // ladders and the idol. Drawn behind Harry; cavernFront adds the water and darkness in front of him.
+  cavernBack(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
+    const c = game.cavern()!, seed = game.room.seed, bottom = CAVERN_VIEW + HEIGHT
+    // Rock between the tunnel floor and the cavern ceiling.
+    ctx.fillStyle = '#4a4232'; ctx.fillRect(0, UNDERGROUND + 5, WIDTH, CAVERN_TOP - UNDERGROUND - 5)
+    for (let i = 0; i < 40; i++) { ctx.fillStyle = i % 2 ? '#3a3427' : '#5d5440'; ctx.fillRect(noise(i + seed) * WIDTH, UNDERGROUND + 9 + noise(i + 70) * 26, 5 + noise(i + 3) * 10, 2) }
+    // Cave air that darkens with depth, and faint columns on the far wall.
+    const air = ctx.createLinearGradient(0, CAVERN_TOP, 0, bottom)
+    air.addColorStop(0, '#1f2c28'); air.addColorStop(1, '#0b1210')
+    ctx.fillStyle = air; ctx.fillRect(0, CAVERN_TOP, WIDTH, bottom - CAVERN_TOP)
+    for (let i = 0; i < 9; i++) {
+      const x = 50 + i * 105 + noise(i + seed) * 40, w = 22 + noise(i + 9) * 26, top = CAVERN_TOP + 40 + noise(i + 19) * 90
+      ctx.fillStyle = '#243430'; ctx.beginPath(); ctx.moveTo(x - w, bottom); ctx.lineTo(x - w * 0.3, top + 20); ctx.lineTo(x, top); ctx.lineTo(x + w * 0.35, top + 24); ctx.lineTo(x + w, bottom); ctx.fill()
+    }
+    // Stalactites along the ceiling, lit on one side.
+    for (let i = 0; i < 26; i++) {
+      const x = i * 38 + noise(i + seed * 3) * 20, length = 10 + noise(i + 40) * 34, w = 6 + noise(i + 60) * 8
+      ctx.fillStyle = '#3a3427'; ctx.beginPath(); ctx.moveTo(x - w, CAVERN_TOP - 1); ctx.lineTo(x, CAVERN_TOP + length); ctx.lineTo(x + w, CAVERN_TOP - 1); ctx.fill()
+      ctx.fillStyle = '#5d5440'; ctx.beginPath(); ctx.moveTo(x - w, CAVERN_TOP - 1); ctx.lineTo(x, CAVERN_TOP + length); ctx.lineTo(x - w * 0.4, CAVERN_TOP - 1); ctx.fill()
+    }
+    ctx.fillStyle = '#cbc4a455'; ctx.font = '10px monospace'; ctx.textAlign = 'center'
+    ctx.fillText('DEEP CAVERN  /  ONE GOLDEN IDOL', 480, CAVERN_TOP + 64)
+    // River water over a pebbled bed; the ledges below cover its sides.
+    const { river } = c, riverWidth = river.right - river.left
+    ctx.fillStyle = '#2f2c22'; ctx.fillRect(river.left, RIVER_BED, riverWidth, bottom - RIVER_BED)
+    const water = ctx.createLinearGradient(0, WATER_SURFACE, 0, RIVER_BED)
+    water.addColorStop(0, '#24605f'); water.addColorStop(1, '#10302f')
+    ctx.fillStyle = water; ctx.fillRect(river.left, WATER_SURFACE, riverWidth, RIVER_BED - WATER_SURFACE)
+    for (let i = 0; i < 18; i++) {
+      ctx.fillStyle = i % 2 ? '#4f4a3a' : '#6b6450'
+      ctx.beginPath(); ctx.ellipse(river.left + 8 + noise(i + seed) * (riverWidth - 16), RIVER_BED + 1, 4 + noise(i + 5) * 6, 3, 0, Math.PI, TAU); ctx.fill()
+    }
+    // Everything that isn't river or chasm is solid rock, from the ledge tops down.
+    const gaps = [river, ...c.chasms].sort((a, b) => a.left - b.left)
+    let from = CAVERN_WALL
+    for (const edge of [...gaps, { left: WIDTH - CAVERN_WALL, right: WIDTH }]) {
+      const w = edge.left - from
+      ctx.fillStyle = '#4b4535'; ctx.fillRect(from, CAVERN_FLOOR, w, bottom - CAVERN_FLOOR)
+      ctx.fillStyle = '#3a3427'; for (const y of [24, 50, 84]) ctx.fillRect(from, CAVERN_FLOOR + y + noise(from + y) * 6, w, 2)
+      ctx.fillStyle = '#00000038'; ctx.fillRect(from + w - 4, CAVERN_FLOOR + 5, 4, bottom - CAVERN_FLOOR); ctx.fillStyle = '#ffffff10'; ctx.fillRect(from, CAVERN_FLOOR + 5, 3, bottom - CAVERN_FLOOR)
+      ctx.fillStyle = '#7c7058'; ctx.fillRect(from, CAVERN_FLOOR, w, 5)
+      for (let i = 0; i < w / 14; i++) { ctx.fillStyle = '#5f5642'; ctx.fillRect(from + noise(i + from) * (w - 6), CAVERN_FLOOR + 8 + noise(i + from + 9) * 80, 6, 2) }
+      from = edge.right
+    }
+    ctx.fillStyle = '#2f2a20'; ctx.fillRect(0, CAVERN_TOP, CAVERN_WALL, bottom - CAVERN_TOP); ctx.fillRect(WIDTH - CAVERN_WALL, CAVERN_TOP, CAVERN_WALL, bottom - CAVERN_TOP)
+    // Glowing fungi by each ladder, the only light down here.
+    for (const x of c.ladders) {
+      const fx = x + (x < 480 ? 46 : -46), pulse = 0.2 + Math.sin(time * 1.5 + x) * 0.05
+      const glow = ctx.createRadialGradient(fx, CAVERN_FLOOR - 6, 0, fx, CAVERN_FLOOR - 6, 70)
+      glow.addColorStop(0, `rgba(127, 224, 200, ${pulse})`); glow.addColorStop(1, 'rgba(127, 224, 200, 0)')
+      ctx.fillStyle = glow; ctx.fillRect(fx - 70, CAVERN_FLOOR - 76, 140, 82)
+      for (const [dx, h, r] of [[-7, 9, 5], [2, 13, 6.5], [9, 7, 4]] as const) {
+        ctx.fillStyle = '#cfe9dc'; ctx.fillRect(fx + dx - 1, CAVERN_FLOOR - h, 2, h)
+        ctx.fillStyle = '#8fe8cf'; ctx.beginPath(); ctx.ellipse(fx + dx, CAVERN_FLOOR - h, r, r * 0.55, 0, Math.PI, TAU); ctx.fill()
+      }
+    }
+    for (const x of c.ladders) this.caveLadder(ctx, x)
+    for (const eel of game.eels()) this.eel(ctx, eel.x, eel.y, time, eel.facing)
+    if (!game.idols.has(game.roomIndex)) {
+      const onPillar = game.room.cavern!.idol === 'pillar', bob = onPillar ? Math.sin(time * 3) * 2 : 0
+      const y = c.idol.y - 17 + bob
+      const glow = ctx.createRadialGradient(c.idol.x, y, 0, c.idol.x, y, 50)
+      glow.addColorStop(0, '#f5d47450'); glow.addColorStop(1, '#f5d47400')
+      ctx.fillStyle = glow; ctx.fillRect(c.idol.x - 50, y - 50, 100, 100)
+      drawTreasure(ctx, 'idol', c.idol.x, y)
+      this.sparkle(ctx, c.idol.x - 20, y - 18, 4, '#ffeaaf'); this.sparkle(ctx, c.idol.x + 22, y - 4 - bob, 3, '#ffeaaf')
+    }
+  }
+
+  // In front of Harry: the water, so he looks submerged, bubbles while he dives, and the darkness
+  // that swallows anything falling into the chasm.
+  cavernFront(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
+    const c = game.cavern()!, p = game.player, bottom = CAVERN_VIEW + HEIGHT
+    const { river } = c, riverWidth = river.right - river.left
+    ctx.fillStyle = '#4aa8a133'; ctx.fillRect(river.left, WATER_SURFACE, riverWidth, RIVER_BED - WATER_SURFACE)
+    ctx.strokeStyle = '#8fd3c833'; ctx.lineWidth = 1.5
+    for (let i = 0; i < 7; i++) {
+      const x = river.left + ((noise(i) * riverWidth + time * 26) % riverWidth), y = WATER_SURFACE + 16 + noise(i + 3) * 72
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(Math.min(river.right, x + 18), y); ctx.stroke()
+    }
+    ctx.strokeStyle = '#a6e3d6bb'; ctx.lineWidth = 2; ctx.beginPath()
+    for (let x = river.left; x <= river.right; x += 8) ctx.lineTo(x, WATER_SURFACE + Math.sin(time * 2 + x * 0.05) * 1.2)
+    ctx.stroke()
+    if (p.swimming && p.y > WATER_SURFACE + 14) {
+      ctx.strokeStyle = '#cdeee6aa'; ctx.lineWidth = 1
+      const rise = p.y - WATER_SURFACE - 8
+      for (let i = 0; i < 3; i++) {
+        const y = p.y - 8 - ((time * 36 + i * 14) % rise)
+        ctx.beginPath(); ctx.arc(p.x + p.facing * 20 + Math.sin(time * 4 + i) * 2, y, 1.5 + i * 0.4, 0, TAU); ctx.stroke()
+      }
+    }
+    // Harry's air: one bubble per second above him, turning red and blinking when it runs low.
+    if (p.swimming && p.breath < BREATH) {
+      const low = p.breath <= LOW_BREATH
+      for (let i = 0; i < BREATH; i++) {
+        const x = p.x + (i - (BREATH - 1) / 2) * 8
+        ctx.beginPath(); ctx.arc(x, p.y - 26, 2.8, 0, TAU)
+        if (p.breath > i && !(low && Math.floor(time * 6) % 2)) { ctx.fillStyle = low ? '#f2a58b' : '#dff6ef'; ctx.fill() }
+        else { ctx.strokeStyle = '#dff6ef66'; ctx.lineWidth = 1; ctx.stroke() }
+      }
+    }
+    const darkness = (left: number, right: number, from: number) => {
+      const dark = ctx.createLinearGradient(0, from, 0, bottom)
+      dark.addColorStop(0, '#05080700'); dark.addColorStop(0.4, '#050807cc'); dark.addColorStop(1, '#050807')
+      ctx.fillStyle = dark; ctx.fillRect(left, from, right - left, bottom - from)
+    }
+    for (const g of c.chasms) {
+      darkness(g.left, g.right, CAVERN_FLOOR + 4)
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = '#9fb3a812'
+        ctx.beginPath(); ctx.ellipse(g.left + (g.right - g.left) * (0.3 + i * 0.25) + Math.sin(time * 0.5 + i) * 10, CAVERN_FLOOR + 50 + i * 16, 34, 7, 0, 0, TAU); ctx.fill()
+      }
+    }
+    darkness(c.pillar.left, c.pillar.right, CAVERN_FLOOR + 40)
+  }
+
+  // A ladder down a shaft through the tunnel floor, its rails poking up so it shows from the tunnel.
+  caveLadder(ctx: CanvasRenderingContext2D, x: number) {
+    ctx.fillStyle = '#1c211b'; ctx.fillRect(x - 24, UNDERGROUND, 48, CAVERN_TOP - UNDERGROUND + 2)
+    ctx.strokeStyle = '#ba9e65'; ctx.lineWidth = 5; ctx.beginPath()
+    ctx.moveTo(x - 18, UNDERGROUND - 12); ctx.lineTo(x - 18, CAVERN_FLOOR); ctx.moveTo(x + 18, UNDERGROUND - 12); ctx.lineTo(x + 18, CAVERN_FLOOR)
+    for (let y = UNDERGROUND - 4; y < CAVERN_FLOOR; y += 16) { ctx.moveTo(x - 18, y); ctx.lineTo(x + 18, y) }
+    ctx.stroke()
+    ctx.fillStyle = '#ddd0a488'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('↓', x, UNDERGROUND - 18)
+  }
+
+  // An electric eel, drawn facing right and mirrored to face the way it swims. Sparks crackle along it.
+  eel(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, facing: number) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(facing, 1)
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    const points = Array.from({ length: 13 }, (_, i) => [22 - i / 12 * 56, Math.sin(time * 8 - i / 12 * 5) * 4 * i / 12] as const)
+    const body = (color: string, width: number, offset = 0) => {
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath()
+      for (const [px, py] of points) ctx.lineTo(px, py + offset)
+      ctx.stroke()
+    }
+    body(`rgba(225, 245, 120, ${0.22 + Math.max(0, Math.sin(time * 5 + x * 0.01)) * 0.25})`, 17)
+    body('#141a10', 11); body('#3f4c2c', 8); body('#c9b25a', 2, 2.5)
+    ctx.fillStyle = '#141a10'; ctx.beginPath(); ctx.ellipse(24, 0, 8, 5.5, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#4b5a33'; ctx.beginPath(); ctx.ellipse(24, -0.5, 7, 4.5, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#f2e27a'; ctx.beginPath(); ctx.arc(27, -1.5, 1.6, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#141a10'; ctx.fillRect(27, -2.3, 0.9, 1.8)
+    // Short zigzag sparks that flicker on and off along the body.
+    const flicker = Math.floor(time * 14)
+    ctx.strokeStyle = '#f4f9b0'; ctx.lineWidth = 1.2
+    for (let i = 0; i < 3; i++) {
+      if (noise(flicker * 3 + i + facing) < 0.45) continue
+      const [sx, sy] = points[2 + i * 4]!, d = noise(flicker + i * 7) > 0.5 ? 1 : -1
+      ctx.beginPath(); ctx.moveTo(sx, sy - 5 * d); ctx.lineTo(sx + 3, sy - 9 * d); ctx.lineTo(sx - 2, sy - 12 * d); ctx.lineTo(sx + 2, sy - 16 * d); ctx.stroke()
+    }
+    ctx.restore()
+  }
+
   tree(ctx: CanvasRenderingContext2D, x: number, width: number, dark: string, light: string) {
     ctx.fillStyle = dark
     ctx.beginPath(); ctx.moveTo(x - width / 2, 42); ctx.lineTo(x + width / 2, 40); ctx.lineTo(x + width / 2 - 6, 252); ctx.quadraticCurveTo(x + width / 2, 283, x + width, 306); ctx.quadraticCurveTo(x + 7, 296, x, 290); ctx.lineTo(x - width, 307); ctx.quadraticCurveTo(x - width / 2 + 3, 260, x - width / 2, 42); ctx.fill()
@@ -500,6 +694,10 @@ export class JungleRenderer {
       ctx.strokeStyle = '#254b32'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, 0); ctx.quadraticCurveTo(x + 15, 82, x, 167); ctx.stroke()
       for (let i = 0; i < 8; i++) this.leaf(ctx, x + Math.sin(i * 0.4) * 5, 35 + i * 15, (i % 2 ? -0.4 : 3.5) + Math.sin(time + i) * 0.04, 19, '#315c38')
     }
+  }
+
+  // Darkened edges, in screen space so they stay put when the view scrolls.
+  vignette(ctx: CanvasRenderingContext2D) {
     const vignette = ctx.createLinearGradient(0, 0, WIDTH, 0)
     vignette.addColorStop(0, '#152a2444'); vignette.addColorStop(0.15, '#152a2400'); vignette.addColorStop(0.85, '#152a2400'); vignette.addColorStop(1, '#152a2444')
     ctx.fillStyle = vignette; ctx.fillRect(0, 0, WIDTH, HEIGHT)
@@ -510,7 +708,12 @@ export class JungleRenderer {
     if (p.invulnerable > 0 && game.status === 'playing' && Math.floor(game.elapsed * 12) % 2) return
     const running = p.grounded && Math.abs(p.vx) > 1
     const stride = running ? Math.sin(game.elapsed * 19) : 0
-    ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.scale(p.facing, 1)
+    ctx.save()
+    if (p.swimming) {
+      // Swimming, Harry's figure is turned on its side: face down, head toward the way he swims.
+      ctx.translate(Math.round(p.x), Math.round(p.y + Math.sin(game.elapsed * 3) * 1.2)); ctx.scale(p.facing, 1)
+      ctx.translate(-22, 0); ctx.rotate(Math.PI / 2)
+    } else { ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.scale(p.facing, 1) }
     if (p.grounded) { ctx.fillStyle = '#202c283a'; ctx.beginPath(); ctx.ellipse(0, 1, 19, 4, 0, 0, TAU); ctx.fill() }
     // Harry: jointed arms and legs (far side darker, behind the body), a shaded shirt with a
     // pack, belt and collar, a face with ear, brow and nose, and a banded pith helmet. Drawn facing
@@ -527,16 +730,20 @@ export class JungleRenderer {
     }
     // Angles are measured from straight down; positive swings toward the way Harry faces.
     const joint = (x: number, y: number, angle: number, length: number) => [x + Math.sin(angle) * length, y + Math.cos(angle) * length] as const
-    // Two-bone reach for hands that hold something (vine, ladder rungs); the elbow bends outward.
-    const reach = (sx: number, sy: number, hx: number, hy: number, a: number, b: number) => {
+    // Two-bone reach for hands that hold something (vine, ladder rungs). The elbow bends outward,
+    // or down below the hand when `under` is set.
+    const reach = (sx: number, sy: number, hx: number, hy: number, a: number, b: number, under = false) => {
       const dx = hx - sx, dy = hy - sy, d = Math.min(Math.hypot(dx, dy), a + b - 0.01)
-      const base = Math.atan2(dy, dx), bend = Math.acos(Math.max(-1, Math.min(1, (a * a + d * d - b * b) / (2 * a * d))))
+      const base = Math.atan2(dy, dx), bend = Math.acos(Math.max(-1, Math.min(1, (a * a + d * d - b * b) / (2 * a * d)))) * (under ? -1 : 1)
       return [sx + Math.cos(base - bend) * a, sy + Math.sin(base - bend) * a, sx + Math.cos(base) * d, sy + Math.sin(base) * d] as const
     }
     let legs: [number, number, number, number], arms: [number, number, number, number] | null = null
     let hands: [number, number, number, number] | null = null
     if (p.swinging) { legs = [0.45, 0.6, 0.15, 0.75]; hands = [1, -47, 4, -48] }
-    else if (p.climbing) { const c = Math.sin(t * 12); legs = [0.45 + 0.35 * c, 1, 0.45 - 0.35 * c, 1]; hands = [7, -42 - 5 * c, -2, -42 + 5 * c] }
+    // Climbing: the cycle follows height (one stroke per two rungs), so Harry holds still when he stops.
+    // Hands grip out in front at shoulder height with the elbows tucked down at mid-torso.
+    else if (p.climbing) { const c = Math.sin(p.y * TAU / 32); legs = [0.45 + 0.35 * c, 1, 0.45 - 0.35 * c, 1]; hands = [11, -33 - 2.5 * c, 9, -33 + 2.5 * c] }
+    else if (p.swimming) { const kick = Math.sin(t * 10) * 0.3, stroke = Math.sin(t * 5) * 1.3; legs = [0.2 + kick, 0.25, 0.2 - kick, 0.25]; arms = [Math.PI / 2 + stroke, 0.3, Math.PI / 2 - stroke, 0.3] }
     else if (!p.grounded) { legs = [1, 1.4, -0.25, 1]; arms = [2.4, 0.35, -0.7, 0.5] }
     else if (stride) { legs = [stride * 0.7, 0.25 + Math.max(0, -stride) * 1.1, -stride * 0.7, 0.25 + Math.max(0, stride) * 1.1]; arms = [-stride * 0.8, 0.9, stride * 0.8, 0.9] }
     else { const breathe = Math.sin(t * 2.2) * 0.04; legs = [0.06, 0.1, -0.1, 0.12]; arms = [0.12 + breathe, 0.35, -0.12 - breathe, 0.3] }
@@ -554,7 +761,7 @@ export class JungleRenderer {
     }
     const drawArm = (shoulderX: number, upper: number, bend: number, sleeve: string, hand: string, target?: readonly [number, number]) => {
       let elbow: readonly [number, number], wrist: readonly [number, number]
-      if (target) { const r = reach(shoulderX, shoulder[1], target[0], target[1], 8, 8); elbow = [r[0], r[1]]; wrist = [r[2], r[3]] }
+      if (target) { const r = reach(shoulderX, shoulder[1], target[0], target[1], 8, 8, p.climbing); elbow = [r[0], r[1]]; wrist = [r[2], r[3]] }
       else { elbow = joint(shoulderX, shoulder[1], upper, 8); wrist = joint(elbow[0], elbow[1], upper + bend, 7.5) }
       line(sleeve, 5, [shoulderX, shoulder[1], elbow[0], elbow[1]])
       line(hand, 3.6, [elbow[0], elbow[1], wrist[0], wrist[1]])

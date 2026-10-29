@@ -17,9 +17,11 @@ export class JungleAudio {
     if (event === 'log') return this.logThud()
     if (event === 'hurt') return this.deathTune()
     if (event === 'swing') return this.jungleYell()
-    const notes: Record<Exclude<GameEvent, 'log' | 'hurt' | 'swing'>, number[]> = {
+    if (event === 'splash') return this.splash()
+    if (event === 'zap') return this.zap()
+    const notes: Record<Exclude<GameEvent, 'log' | 'hurt' | 'swing' | 'splash' | 'zap'>, number[]> = {
       jump: [220, 440], treasure: [523, 659, 784, 1047],
-      fall: [330, 165], tent: [392, 523], win: [523, 659, 784, 1047, 784, 1047],
+      fall: [330, 165], tent: [392, 523], air: [988, 740, 988, 740], win: [523, 659, 784, 1047, 784, 1047],
     }
     notes[event].forEach((frequency, i) => this.tone(frequency, i * 0.075, 0.12, 0.035, 'square'))
   }
@@ -43,6 +45,26 @@ export class JungleAudio {
   logThud() {
     this.tone(160, 0, 0.07, 0.06, 'triangle', 55)
     this.tone(90, 0, 0.05, 0.03, 'square', 45)
+  }
+
+  // Harry dropping into the underground river: a burst of noise that dulls as it fades.
+  splash() {
+    const ctx = this.context!, now = ctx.currentTime
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.35), ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length) ** 2
+    const source = ctx.createBufferSource(); source.buffer = buffer
+    const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'
+    filter.frequency.setValueAtTime(1800, now); filter.frequency.exponentialRampToValueAtTime(260, now + 0.35)
+    const gain = ctx.createGain(); gain.gain.value = 0.16
+    source.connect(filter); filter.connect(gain); gain.connect(ctx.destination)
+    source.start(now)
+  }
+
+  // An electric eel's shock: a buzzing crackle that drops away, just before the death tune.
+  zap() {
+    this.tone(1400, 0, 0.2, 0.045, 'sawtooth', 180)
+    this.tone(70, 0, 0.22, 0.04, 'square', 40)
   }
 
   // A jungle yodel when Harry grabs a vine: a rising call, a chest/falsetto yodel break, and a long

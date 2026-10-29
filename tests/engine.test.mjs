@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CAMP_EDGE_X, CAMP_TUNNEL_EDGE_X, TENT_DOOR_X, createWorld, emptyInput, GROUND, HAZARD_REACH, LANDING_WIDTH, PIT_HALF_WIDTH, TUNNEL_TOP, UNDERGROUND, WIDTH, PitfallEngine, TREASURE_VALUES } from '../app/game/engine.ts'
+import { CAMP_EDGE_X, CAMP_TUNNEL_EDGE_X, TENT_DOOR_X, createWorld, emptyInput, GROUND, HAZARD_REACH, LANDING_WIDTH, PIT_HALF_WIDTH, TUNNEL_TOP, UNDERGROUND, WIDTH, PitfallEngine, TREASURE_VALUES, CAVERN_FLOOR, CAVERN_VIEW, CAVERN_WALL, EEL_REACH, IDOL_VALUE, RIVER, RIVER_BED, SWIM_MARGIN, WATER_SURFACE, BREATH, LOW_BREATH, TUNNEL_PIT_HALF } from '../app/game/engine.ts'
 import { COMPUTER_DELAY, TicTacToe } from '../app/game/tictactoe.ts'
 
 function running() { const game = new PitfallEngine(); game.start(); game.player.invulnerable = 0; return game }
@@ -45,11 +45,13 @@ test('Harry cannot walk left past base camp into scene 255, above or below groun
   game.player.layer = 'tunnel'; game.player.y = UNDERGROUND; advance(game, 2, { left: true })
   assert.equal(game.roomIndex, 0); assert.equal(game.player.x, CAMP_TUNNEL_EDGE_X)
 })
-test('underground travel skips exactly three scenes and wraps', () => {
+test('underground travel moves one scene at a time and wraps', () => {
   const game = running(); game.player.layer = 'tunnel'; game.player.y = UNDERGROUND; game.player.x = WIDTH + 9
-  advance(game, 0.02, { right: true }); assert.equal(game.roomIndex, 3)
-  game.roomIndex = 2; game.player.x = -9
-  advance(game, 0.02, { left: true }); assert.equal(game.roomIndex, 254)
+  advance(game, 0.02, { right: true }); assert.equal(game.roomIndex, 1)
+  game.roomIndex = 5; game.player.x = -9
+  advance(game, 0.02, { left: true }); assert.equal(game.roomIndex, 4)
+  game.roomIndex = 254; game.player.x = WIDTH + 9
+  advance(game, 0.02, { right: true }); assert.equal(game.roomIndex, 0)
 })
 test('a jump has an arc, clears obstacles, lands, and never auto-repeats', () => {
   const game = running()
@@ -255,4 +257,126 @@ test('tic-tac-toe: computer wins and draws are recognised, and the cursor wraps'
   for (const square of [0, 2, 3, 7, 8]) { draw.play(square); draw.update(1) } // O: 1, 4, 5, 6
   assert.equal(draw.outcome, 'draw'); assert.equal(draw.draws, 1)
   draw.cursor = 0; draw.moveCursor(-1, -1); assert.equal(draw.cursor, 8); draw.moveCursor(1, 0); assert.equal(draw.cursor, 6)
+})
+
+// Deep caverns. Each test drops Harry straight into the cavern of a chosen scene.
+function inCavern(predicate, place = {}) {
+  const game = running(); roomOf(game, r => r.cavern && predicate(r.cavern))
+  Object.assign(game.player, { layer: 'cavern', y: CAVERN_FLOOR, ...place })
+  return game
+}
+const swimmer = (x, y = WATER_SURFACE + 5) => ({ x, y, swimming: true, grounded: false })
+test('eight caverns lie under tunnels without a surface ladder, the first one tunnel screen from scene 2', () => {
+  const caverns = createWorld().filter(r => r.cavern)
+  assert.equal(caverns.length, 8)
+  assert.ok(caverns.every(r => !r.ladder))
+  assert.deepEqual(caverns.map(r => r.cavern.idol), ['river', 'pillar', 'river', 'pillar', 'river', 'pillar', 'river', 'pillar'])
+  assert.ok(caverns.some(r => r.cavern.flip) && caverns.some(r => !r.cavern.flip))
+  assert.equal(caverns[0].id, 4); assert.ok(createWorld()[1].ladder)
+})
+test('mirrored caverns put the river on the right, with the ladders, chasm and idol mirrored too', () => {
+  const plain = inCavern(c => !c.flip && c.idol === 'pillar').cavern(), mirrored = inCavern(c => c.flip && c.idol === 'pillar').cavern()
+  assert.deepEqual(plain.river, { left: RIVER[0], right: RIVER[1] })
+  assert.deepEqual(mirrored.river, { left: WIDTH - RIVER[1], right: WIDTH - RIVER[0] })
+  assert.deepEqual(mirrored.ladders, plain.ladders.map(x => WIDTH - x))
+  assert.equal(mirrored.idol.x, WIDTH - plain.idol.x)
+})
+test('a shaft in the tunnel floor leads down to the cavern and back up, with the view following Harry', () => {
+  const game = running(); roomOf(game, r => r.cavern && !r.cavern.flip)
+  const [ladder] = game.cavern().ladders
+  Object.assign(game.player, { layer: 'tunnel', y: UNDERGROUND, x: ladder + 10 })
+  assert.equal(game.viewY(), 0)
+  advance(game, 0.8, { down: true }); assert.ok(game.player.climbing); assert.ok(game.viewY() > 0 && game.viewY() < CAVERN_VIEW)
+  advance(game, 1.2, { down: true }); assert.equal(game.player.layer, 'cavern'); assert.equal(game.player.y, CAVERN_FLOOR)
+  assert.ok(game.player.grounded); assert.equal(game.viewY(), CAVERN_VIEW); assert.ok(game.cavernsFound.has(game.roomIndex))
+  advance(game, 2, { up: true }); assert.equal(game.player.layer, 'tunnel'); assert.equal(game.player.y, UNDERGROUND); assert.equal(game.viewY(), 0)
+  assert.equal(game.score, 2000); assert.equal(game.lives, 3)
+})
+test('rock walls close off both ends of a cavern', () => {
+  const game = inCavern(c => !c.flip, { x: 60 })
+  advance(game, 1, { left: true }); assert.equal(game.player.x, CAVERN_WALL + 12); assert.equal(game.roomIndex, 4)
+})
+test('Harry swims: he drops in off the bank, dives, floats back up, and climbs out at the far bank', () => {
+  const game = inCavern(c => !c.flip, { x: RIVER[0] - 10 }); game.eels = () => []
+  const events = []
+  advance(game, 0.4, { right: true }); events.push(...game.events.splice(0))
+  assert.ok(game.player.swimming); assert.ok(events.includes('splash'))
+  advance(game, 1.5, { down: true }); assert.equal(game.player.y, RIVER_BED - 8)
+  advance(game, 8); assert.equal(game.player.y, WATER_SURFACE + 5)
+  for (let t = 0; t < 4 && game.player.swimming; t += 1 / 120) advance(game, 1 / 120, { right: true })
+  assert.equal(game.player.swimming, false); assert.ok(game.player.grounded)
+  assert.equal(game.player.y, CAVERN_FLOOR); assert.ok(game.player.x > RIVER[1])
+})
+test('a jump at the surface kicks Harry clear of the water and onto the nearby bank', () => {
+  const game = inCavern(c => !c.flip, swimmer(RIVER[0] + SWIM_MARGIN)); game.eels = () => []
+  advance(game, 0.05, { jump: true, left: true }); assert.equal(game.player.swimming, false)
+  advance(game, 0.8, { left: true }); assert.ok(game.player.grounded); assert.equal(game.player.y, CAVERN_FLOOR); assert.ok(game.player.x < RIVER[0])
+})
+test('electric eels are lethal, and Harry starts again at the foot of the ladder he came down', () => {
+  const game = inCavern(c => !c.flip); const ladders = game.cavern().ladders; game.cavernEntry = ladders[1]
+  const [eel] = game.eels(); Object.assign(game.player, swimmer(eel.x, eel.y))
+  advance(game, 1 / 120); assert.ok(game.events.includes('zap')); assert.equal(game.lives, 2)
+  advance(game, 1.4); assert.equal(game.player.layer, 'cavern'); assert.equal(game.player.swimming, false)
+  assert.equal(game.player.x, ladders[1]); assert.equal(game.player.y, CAVERN_FLOOR); assert.ok(game.player.invulnerable > 0)
+})
+test('eels stay in their lanes and turn back before the water by either bank', () => {
+  const game = inCavern(c => !c.flip), { river } = game.cavern()
+  const between = (WATER_SURFACE + 5 + RIVER_BED - 8) / 2
+  for (let t = 0; t < 30; t += 0.05) {
+    for (const eel of game.eels(t)) {
+      assert.ok(eel.x - EEL_REACH.x > river.left + SWIM_MARGIN && eel.x + EEL_REACH.x < river.right - SWIM_MARGIN)
+      assert.ok(Math.abs(eel.y - between) >= EEL_REACH.y)
+    }
+  }
+})
+test('the chasm is bottomless, but a jump reaches the pillar and another reaches the far ledge', () => {
+  const falling = inCavern(c => !c.flip); const c = falling.cavern(); falling.player.x = c.chasms[0].left - 6
+  advance(falling, 0.6, { right: true }); assert.equal(falling.lives, 2); assert.ok(falling.player.inChasm)
+  const depth = falling.player.y; advance(falling, 0.3); assert.ok(falling.player.y > depth + 40)
+  advance(falling, 1.2); assert.equal(falling.player.layer, 'cavern'); assert.equal(falling.player.y, CAVERN_FLOOR)
+  const game = inCavern(r => !r.flip, { x: c.chasms[0].left - 30 })
+  advance(game, 0.75, { right: true, jump: true }); advance(game, 0.1)
+  assert.ok(game.player.grounded); assert.ok(game.player.x > c.pillar.left && game.player.x < c.pillar.right)
+  advance(game, 0.75, { right: true, jump: true }); advance(game, 0.1)
+  assert.ok(game.player.grounded); assert.ok(game.player.x > c.chasms[1].right); assert.equal(game.lives, 3)
+})
+test('Harry cannot climb back onto a ledge once he has dropped below its top', () => {
+  const game = inCavern(c => !c.flip); const c = game.cavern()
+  Object.assign(game.player, { x: c.chasms[0].left + 10, y: CAVERN_FLOOR + 10, grounded: false, vy: 0 })
+  advance(game, 0.1, { left: true }); assert.ok(game.player.x > c.chasms[0].left + 4); assert.equal(game.player.grounded, false)
+})
+test('golden idols are bonus loot: worth 6,000 once each, and not among the 32 treasures', () => {
+  const diver = inCavern(c => c.idol === 'river'); diver.eels = () => []
+  Object.assign(diver.player, swimmer(diver.cavern().idol.x))
+  advance(diver, 1.5, { down: true }); assert.equal(diver.score, 2000 + IDOL_VALUE); assert.ok(diver.idols.has(diver.roomIndex))
+  advance(diver, 1, { down: true }); assert.equal(diver.score, 2000 + IDOL_VALUE); assert.equal(diver.treasureCount, 0)
+  const climber = inCavern(c => c.idol === 'pillar'); climber.player.x = climber.cavern().idol.x
+  advance(climber, 0.1); assert.equal(climber.score, 2000 + IDOL_VALUE); assert.equal(climber.status, 'playing')
+  climber.start(); assert.equal(climber.idols.size, 0); assert.equal(climber.cavernsFound.size, 0)
+})
+test('Harry has limited air underwater, with a warning before it runs out', () => {
+  const game = inCavern(c => !c.flip, swimmer(380, 757)); game.eels = () => []
+  const events = []
+  advance(game, BREATH - LOW_BREATH + 0.05, { down: true }); events.push(...game.events.splice(0))
+  assert.ok(events.includes('air')); assert.equal(game.lives, 3)
+  advance(game, LOW_BREATH, { down: true }); assert.equal(game.lives, 2); assert.match(game.message, /air/)
+})
+test('air refills at the surface, and floating there uses none', () => {
+  const game = inCavern(c => !c.flip, swimmer(380, 757)); game.eels = () => []
+  advance(game, 4, { down: true }); assert.ok(game.player.breath < BREATH - 3)
+  advance(game, 4, { up: true }); assert.equal(game.player.breath, BREATH)
+  advance(game, 20); assert.equal(game.player.breath, BREATH); assert.equal(game.lives, 3)
+})
+test('some ladder tunnels have a bottomless pit: walking in costs a life, a running jump clears it', () => {
+  const pits = createWorld().filter(r => r.tunnelPit)
+  assert.ok(pits.length >= 8); assert.ok(pits.every(r => r.ladder && !r.wall && r.id > 0))
+  assert.ok(pits.some(r => r.tunnelPit < 480) && pits.some(r => r.tunnelPit > 480))
+  const game = running(); const { tunnelPit: pit } = roomOf(game, r => r.tunnelPit && r.tunnelPit < 480)
+  Object.assign(game.player, { layer: 'tunnel', y: UNDERGROUND, x: pit - TUNNEL_PIT_HALF - 2 })
+  advance(game, 0.6, { right: true }); assert.equal(game.lives, 2); assert.ok(game.player.inChasm)
+  advance(game, 1.4); assert.equal(game.player.layer, 'surface')
+  const jumper = running(); roomOf(jumper, r => r.tunnelPit === pit)
+  Object.assign(jumper.player, { layer: 'tunnel', y: UNDERGROUND, x: pit - TUNNEL_PIT_HALF - 16 })
+  advance(jumper, 0.47, { right: true, jump: true }); advance(jumper, 0.05)
+  assert.ok(jumper.player.grounded); assert.ok(jumper.player.x > pit + TUNNEL_PIT_HALF - 4); assert.equal(jumper.lives, 3)
 })
