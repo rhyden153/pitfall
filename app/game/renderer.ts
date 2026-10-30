@@ -54,9 +54,11 @@ export function drawTreasure(ctx: CanvasRenderingContext2D, kind: Loot, x: numbe
     ctx.moveTo(-8, 9); ctx.lineTo(8, 9); ctx.stroke()
     ctx.strokeStyle = '#ffffffaa'; ctx.beginPath(); ctx.moveTo(-9, -12); ctx.quadraticCurveTo(-3, -16, 3, -15); ctx.moveTo(8, -9); ctx.lineTo(11, -4); ctx.stroke()
   } else if (kind === 'gold' || kind === 'silver') {
-    ctx.fillStyle = kind === 'gold' ? '#bf882e' : '#82928d'; ctx.beginPath(); ctx.moveTo(-23, 10); ctx.lineTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(23, 10); ctx.fill()
-    ctx.fillStyle = kind === 'gold' ? '#efcc68' : '#dbe0cb'; ctx.beginPath(); ctx.moveTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(13, 0); ctx.lineTo(-19, 0); ctx.fill()
-    ctx.fillStyle = kind === 'gold' ? '#e5ad43' : '#aabfb5'; ctx.fillRect(-19, 1, 34, 9)
+    // A squared-off bar seen from the front and a little above: the front face, the top, and the right-hand end.
+    const gold = kind === 'gold'
+    ctx.fillStyle = gold ? '#e5ad43' : '#aabfb5'; ctx.fillRect(-20, 0, 34, 10)
+    ctx.fillStyle = gold ? '#efcc68' : '#dbe0cb'; ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-14, -7); ctx.lineTo(20, -7); ctx.lineTo(14, 0); ctx.fill()
+    ctx.fillStyle = gold ? '#bf882e' : '#82928d'; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(20, -7); ctx.lineTo(20, 3); ctx.lineTo(14, 10); ctx.fill()
   } else if (kind === 'bag') {
     ctx.fillStyle = '#d5b373'; ctx.beginPath(); ctx.moveTo(-9, -17); ctx.lineTo(9, -17); ctx.lineTo(5, -6); ctx.bezierCurveTo(29, 18, -28, 18, -5, -6); ctx.fill()
     ctx.strokeStyle = '#765637'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-7, -5); ctx.lineTo(8, -5); ctx.stroke()

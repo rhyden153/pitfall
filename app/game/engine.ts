@@ -122,16 +122,20 @@ export type Particle = { x: number; y: number; vx: number; vy: number; life: num
 export const atTentDoor = (roomIndex: number, p: Player) => roomIndex === 0 && p.layer === 'surface' && p.grounded && !p.climbing && Math.abs(p.x - TENT_DOOR_X) < TENT_DOOR_REACH
 export const wrap = (n: number, max: number) => ((n % max) + max) % max
 
+// The deep caverns, west to east: the scene each lies under (by index), and whether it's mirrored with
+// the river on the right. Each scene has no surface ladder and is three scenes west of one that does, and
+// the caverns are spread around the jungle 26 to 40 scenes apart, counting the gap past base camp.
+export const DEEP_CAVERNS = [[4, false], [42, true], [70, false], [96, true], [125, true], [161, false], [189, false], [220, true]] as const
+
 // A maximal eight-bit feedback sequence makes a stable, circular 255-scene jungle.
 // The layout is a new arrangement; no cartridge code or assets are used.
 export function createWorld(): Room[] {
   let seed = 1
   let treasureIndex = 0
-  let cavernIndex = 0
   const kinds = ['Jungle trail', 'Hidden passages', 'Tar pit', 'Crocodile crossing', 'Shifting sands', 'Lost treasure', 'Sinking ground', 'Vine valley']
   const treasures: Treasure[] = ['gold', 'bag', 'silver', 'ring']
   return Array.from({ length: 255 }, (_, id) => {
-    const kind = (seed >> 3) & 7
+    const kind = (seed >> 3) & 7, deep = DEEP_CAVERNS.findIndex(([scene]) => scene === id)
     const room: Room = {
       id, seed, kind, name: kinds[kind]!, ladder: kind < 2, holes: kind === 1,
       pit: kind === 2 ? 'tar' : kind === 3 ? 'water' : kind === 4 || kind === 7 ? 'sand' : kind === 6 ? 'tar' : null,
@@ -141,9 +145,9 @@ export function createWorld(): Room[] {
       hazard: null, hazardX: 720,
       treasure: kind === 5 ? treasures[treasureIndex++ % 4]! : null,
       wall: kind < 2 && (seed & 3) === 0,
-      // Eight tunnels without a surface ladder have a cavern below; the idol alternates between
-      // the riverbed and the pillar in the chasm.
-      cavern: kind >= 2 && (seed & 31) === 17 ? { flip: ((seed >> 5) & 1) === 1, idol: cavernIndex++ % 2 ? 'pillar' : 'river' } : null,
+      // Eight tunnels have a deep cavern below; the idol alternates between the riverbed and the pillar
+      // in the chasm.
+      cavern: deep >= 0 ? { flip: DEEP_CAVERNS[deep]![1], idol: deep % 2 ? 'pillar' : 'river' } : null,
       // Ladder scenes have no scorpions, so a pit is the tunnel's one hazard; never under base camp
       // or in a tunnel with a wall.
       tunnelPit: kind < 2 && id > 0 && (seed & 3) === 2 ? TUNNEL_PIT_SPOTS[(seed >> 2) & 1]! : null,

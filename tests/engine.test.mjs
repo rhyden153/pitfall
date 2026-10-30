@@ -292,11 +292,18 @@ test('eight caverns lie under tunnels without a surface ladder, the first one tu
   assert.ok(caverns.some(r => r.cavern.flip) && caverns.some(r => !r.cavern.flip))
   assert.equal(caverns[0].id, 4); assert.ok(createWorld()[1].ladder)
 })
+test('the deep caverns are spread around the jungle, 26 to 40 scenes apart, each below a ladder three scenes east', () => {
+  const world = createWorld(), scenes = world.filter(r => r.cavern).map(r => r.id)
+  const gaps = scenes.map((id, i) => (scenes[(i + 1) % scenes.length] - id + 255) % 255)
+  assert.ok(gaps.every(gap => gap >= 26 && gap <= 40), `gaps ${gaps}`)
+  // Not base camp's ladder: there's no walking west from its tunnel.
+  assert.ok(scenes.every(id => world[(id + 3) % 255].ladder && (id + 3) % 255 !== 0))
+})
 test('every cavern is one tunnel screen west of the ladder three scenes east', () => {
   for (const cave of createWorld().filter(r => r.cavern)) {
     const game = running(); game.roomIndex = (cave.id + 3) % 255
     assert.ok(game.room.ladder, `scene ${cave.id + 4} has a ladder`)
-    advance(game, 1, { down: true }); assert.equal(game.player.layer, 'tunnel')
+    game.player.x = 480; advance(game, 1.2, { down: true }); assert.equal(game.player.layer, 'tunnel'); assert.equal(game.score, 2000)
     // Walk west, jumping any pit in the tunnel floor, until Harry reaches the cavern's tunnel screen.
     for (let t = 0; t < 20 && game.roomIndex !== cave.id; t += 1 / 120) {
       const pit = game.room.tunnelPit, ahead = pit === null ? 0 : game.player.x - pit
