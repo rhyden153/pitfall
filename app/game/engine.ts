@@ -166,9 +166,9 @@ export function createWorld(): Room[] {
 // chamber below. The layouts are new arrangements.
 export const LOST_CAVERNS: readonly (readonly ChamberPlan[])[] = [[
   { name: 'Bat roost', kind: 'roost', up: [560], bats: [[90, 470], [630, 900]], relic: ['emerald', 280] },
-  { name: 'Flooded gallery', kind: 'lake', up: [400], rivers: [[480, 860, 'sb']], rats: [[100, 320]], relic: ['emerald', 670] },
+  { name: 'Flooded gallery', kind: 'lake', up: [400], rivers: [[480, 860, 'sb']], rats: [[170, 340]], relic: ['emerald', 670] },
   { name: 'Stepping stones', kind: 'stones', up: [560], down: [890], chasms: [[130, 220], [270, 360], [720, 810]], relic: ['emerald', 245] },
-  { name: 'Rat run', kind: 'rats', up: [400], rats: [[80, 330], [470, 870]], relic: ['emerald', 670] },
+  { name: 'Rat run', kind: 'rats', up: [400], rats: [[170, 340], [470, 800]], relic: ['emerald', 670] },
   { name: 'Waterfall', kind: 'falls', up: [400], down: [860], rivers: [[560, 800, 'b']], chasms: [[140, 240]], relic: ['emerald', 680] },
   { name: 'Crystal grotto', kind: 'grotto', up: [560], bats: [[100, 460]], chasms: [[640, 740], [790, 876]], relic: ['emerald', 765] },
   { name: 'Twin pools', kind: 'lake', up: [560], down: [440], rivers: [[110, 330, 'b'], [680, 860, 's']], relic: ['emerald', 220] },
@@ -176,11 +176,11 @@ export const LOST_CAVERNS: readonly (readonly ChamberPlan[])[] = [[
 ], [
   { name: 'Bat cathedral', kind: 'roost', bats: [[80, 330], [360, 620], [650, 900]], relic: ['mask', 490] },
   { name: 'Eel lake', kind: 'lake', rivers: [[120, 840, 'sb']], relic: ['mask', 480] },
-  { name: 'Hidden spring', kind: 'falls', up: [890], rivers: [[330, 600, 'sb']], chasms: [[120, 210]], rats: [[640, 820]], relic: ['mask', 465] },
+  { name: 'Hidden spring', kind: 'falls', up: [890], rivers: [[330, 600, 'sb']], chasms: [[120, 210]], rats: [[630, 800]], relic: ['mask', 465] },
   { name: 'Crystal hall', kind: 'grotto', bats: [[100, 380], [750, 910]], chasms: [[480, 580], [628, 728]], relic: ['mask', 604] },
   { name: 'Sunken temple', kind: 'temple', up: [860], rivers: [[100, 330, 'sb']], chasms: [[420, 520], [570, 670]], bats: [[400, 690]], relic: ['skull', 545] },
-  { name: 'Rat warren', kind: 'rats', rats: [[80, 300], [340, 600], [640, 880]], relic: ['mask', 470] },
-  { name: 'Broken bridge', kind: 'stones', up: [440], chasms: [[500, 590], [640, 730], [780, 860]], rats: [[80, 360]], relic: ['mask', 755] },
+  { name: 'Rat warren', kind: 'rats', rats: [[170, 340], [380, 590], [630, 800]], relic: ['mask', 470] },
+  { name: 'Broken bridge', kind: 'stones', up: [440], chasms: [[500, 590], [640, 730], [780, 860]], rats: [[170, 380]], relic: ['mask', 755] },
   { name: 'The cascade', kind: 'falls', up: [860], rivers: [[200, 520, 'sb']], chasms: [[600, 700]], relic: ['mask', 360] },
 ]]
 
@@ -369,11 +369,14 @@ export class PitfallEngine {
     })
   }
 
-  // Rats scurry back and forth along their spans of floor, each at its own pace.
-  rats(time = this.elapsed, c = this.cavern()) {
+  // Rats scurry back and forth along their spans of floor, each at its own pace. Their run starts afresh
+  // whenever Harry comes into the chamber (or starts again there), from the middle of each span and
+  // heading away from the end he came in at; `time` counts from then.
+  rats(time = this.elapsed - this.roomEnteredAt, c = this.cavern()) {
     if (!c) return []
+    const away = this.cavernEntry > WIDTH / 2 ? Math.PI : 0
     return c.rats.map((span, i) => {
-      const a = time * (1.5 + i * 0.35) + c.seed + i * 1.9
+      const a = time * (1.5 + i * 0.35) + away
       return { x: (span.left + span.right) / 2 + Math.sin(a) * (span.right - span.left) / 2, facing: Math.cos(a) >= 0 ? 1 : -1 }
     })
   }
@@ -429,7 +432,7 @@ export class PitfallEngine {
           // Back where Harry came into this chamber: at the foot of a ladder, or the end he walked in from.
           const c = this.cavern()!
           this.player = this.newPlayer(this.cavernEntry || c.ladders[0] || CAVERN_WALL + 12, 1.5)
-          this.player.layer = 'cavern'; this.player.y = CAVERN_FLOOR
+          this.player.layer = 'cavern'; this.player.y = CAVERN_FLOOR; this.roomEnteredAt = this.elapsed
         } else { this.player = this.newPlayer(this.roomIndex === 0 ? CAMP_START_X : 108, 1.5); this.player.y = 90; this.player.grounded = false }
       }
       return
@@ -459,7 +462,7 @@ export class PitfallEngine {
       p.y += (Number(input.down) - Number(input.up)) * 150 * dt
       // Halfway along a ladder between cavern levels, Harry passes into the chamber below or above.
       const level = ladder.upper !== 'cavern' ? 0 : p.y > CAVERN_FLOOR + CHAMBER_DEPTH / 2 ? 1 : p.y < CAVERN_FLOOR - CHAMBER_DEPTH / 2 ? -1 : 0
-      if (level) { this.depth += level; p.y -= level * CHAMBER_DEPTH; this.enterChamber(); return }
+      if (level) { this.depth += level; p.y -= level * CHAMBER_DEPTH; this.cavernEntry = p.x; this.enterChamber(); return }
       if (p.y <= ladder.top) {
         p.y = ladder.top; p.layer = ladder.upper; p.climbing = false; p.grounded = true
         if (ladder.upper === 'cavern') this.cavernEntry = ladder.x
@@ -609,6 +612,7 @@ export class PitfallEngine {
   // Harry has come into a cavern chamber; it's marked on the map, and its name announced.
   enterChamber() {
     const c = this.cavern()!, first = !this.chambersFound.has(c.id)
+    this.roomEnteredAt = this.elapsed
     const lost = c.depth > 0 && ![...this.chambersFound].some(id => this.chambers[id]!.depth > 0)
     this.chambersFound.add(c.id)
     if (!c.depth) {

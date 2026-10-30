@@ -473,7 +473,8 @@ test('lost cavern chambers open onto solid ground at both ends, and every gap ca
     gaps.slice(1).forEach((g, i) => assert.ok(g.left - gaps[i].right >= (c.rivers.includes(g) || c.rivers.includes(gaps[i]) ? 80 : 44), `${c.name} ledge`))
     for (const r of c.rats) {
       assert.ok(gaps.every(g => g.right <= r.left - RAT_REACH || g.left >= r.right + RAT_REACH), `${c.name} rats`)
-      assert.ok(r.left - RAT_REACH > CAVERN_WALL + 12 + RAT_REACH && r.right + RAT_REACH < WIDTH - CAVERN_WALL - 12 - RAT_REACH)
+      // A clear run-in of at least 100px from where Harry walks in at either end.
+      assert.ok(r.left - RAT_REACH >= CAVERN_WALL + 12 + 100 && r.right + RAT_REACH <= WIDTH - CAVERN_WALL - 12 - 100, `${c.name} rats near an end`)
     }
   }
 })
@@ -559,6 +560,23 @@ test('cave rats bite, but Harry can jump them', () => {
   const jumper = inChamber(1, 3, { x: 120 }); jumper.rats = () => [{ x: 220, facing: -1 }]
   for (let i = 0; i < 90; i++) jumper.update(1 / 120, { ...emptyInput(), right: true, jump: jumper.player.x >= 220 - RAT_REACH - 30 })
   assert.equal(jumper.lives, 3); assert.ok(jumper.player.x > 220 + RAT_REACH)
+})
+test('rats start mid-run and heading away whenever Harry walks into their chamber, from either end', () => {
+  for (const c of new PitfallEngine().chambers.filter(c => c.rats.length)) {
+    for (const east of [true, false]) {
+      // Long after the expedition began, so the rats' run can't line up with the clock by luck.
+      const game = inChamber(c.depth, (c.column + (east ? 7 : 1)) % 8, { x: east ? WIDTH - 6 : 6 })
+      game.elapsed = 1000 + c.id * 7.3; game.bats = () => []; game.eels = () => []
+      for (let t = 0; t < 0.2 && game.cavern().id !== c.id; t += 1 / 120) advance(game, 1 / 120, { right: east, left: !east })
+      assert.equal(game.cavern().id, c.id)
+      game.rats().forEach((rat, i) => {
+        assert.ok(Math.abs(rat.x - (c.rats[i].left + c.rats[i].right) / 2) < 10, `${c.name} rat ${i} starts mid-run`)
+        assert.equal(rat.facing, east ? 1 : -1)
+      })
+      advance(game, 0.5, { right: east, left: !east })
+      assert.equal(game.lives, 3, `${c.name} entered heading ${east ? 'east' : 'west'}`)
+    }
+  }
 })
 test('relics in the lost caverns are worth their value once each; a fall puts Harry back where he came in', () => {
   const game = inChamber(1, 0, { x: 280 }); game.bats = () => []

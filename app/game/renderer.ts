@@ -150,7 +150,7 @@ export class JungleRenderer {
     if (game.roomIndex === 0) this.camp(ctx, time)
     for (const x of game.logs()) this.log(ctx, x, GROUND - 13, game.elapsed)
     if (game.room.hazard === 'fire') this.fire(ctx, game.room.hazardX, GROUND, time)
-    if (game.room.hazard === 'snake') this.snake(ctx, game.room.hazardX, GROUND, time, game.room.hazardX > 480 ? -1 : 1)
+    if (game.room.hazard === 'snake') this.snake(ctx, game.room.hazardX, GROUND, time, -1)
     if (game.room.treasure && !game.collected.has(game.roomIndex)) {
       const bob = Math.sin(time * 3) * 3
       const glow = ctx.createRadialGradient(480, GROUND - 26, 0, 480, GROUND - 26, 56)
@@ -665,7 +665,7 @@ export class JungleRenderer {
     for (const x of c.ladders) c.depth ? this.caveLadder(ctx, x, CAVERN_VIEW, CAVERN_FLOOR, CAVERN_VIEW, CAVERN_TOP + 2, false) : this.caveLadder(ctx, x, UNDERGROUND, CAVERN_FLOOR, UNDERGROUND, CAVERN_TOP + 2)
     for (const x of c.down) this.caveLadder(ctx, x, CAVERN_FLOOR, bottom, CAVERN_FLOOR, bottom)
     for (const eel of game.eels(game.elapsed, c)) this.eel(ctx, eel.x, eel.y, time, eel.facing)
-    for (const rat of game.rats(game.elapsed, c)) this.rat(ctx, rat.x, CAVERN_FLOOR, time, rat.facing)
+    for (const rat of game.rats(game.elapsed - game.roomEnteredAt, c)) this.rat(ctx, rat.x, CAVERN_FLOOR, time, rat.facing)
     if (!game.relics.has(c.id)) {
       // A relic on the floor bobs gently; one on a riverbed rests there.
       const { kind, x } = c.relic, bob = c.relic.y === CAVERN_FLOOR ? Math.sin(time * 3) * 2 : 0
@@ -1136,7 +1136,7 @@ export class JungleRenderer {
     ctx.restore()
   }
 
-  // A coiled cobra with its hood raised, drawn facing right and mirrored to face the middle of the scene.
+  // A coiled cobra with its hood raised, drawn facing right; every cobra in the jungle is mirrored to face left.
   snake(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, facing: number) {
     const outline = '#1f2a15', body = '#55723a', light = '#7f9a4f', band = '#2f4320', belly = '#d3c77f', hood = '#6c8943'
     const sway = Math.sin(time * 4) * 2.5, bob = Math.sin(time * 2) * 1
