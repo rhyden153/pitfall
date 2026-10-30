@@ -1,4 +1,4 @@
-import { BREATH, CAVERN_FLOOR, CAVERN_TOP, CAVERN_VIEW, CAVERN_WALL, GROUND, HEIGHT, LOW_BREATH, PIT_HALF_WIDTH, PitfallEngine, RIVER_BED, TUNNEL_PIT_HALF, TUNNEL_TOP, UNDERGROUND, VINE_PIVOT_Y, WATER_SURFACE, WIDTH, type Loot } from './engine'
+import { BREATH, CAVERN_FLOOR, CAVERN_TOP, CAVERN_VIEW, CAVERN_WALL, CHAMBER_DEPTH, GROUND, HEIGHT, HOLES, LOST_CAVERNS, LOW_BREATH, PIT_HALF_WIDTH, PitfallEngine, RIVER_BED, TUNNEL_PIT_HALF, TUNNEL_TOP, UNDERGROUND, VINE_PIVOT_Y, WALL, WATER_SURFACE, WIDTH, type Chamber, type Loot } from './engine'
 
 // The tic-tac-toe board on the tent's table, in canvas coordinates (the page overlays its buttons here).
 export const BOARD = { x: 330, y: 90, cell: 100 } as const
@@ -18,6 +18,41 @@ export function drawTreasure(ctx: CanvasRenderingContext2D, kind: Loot, x: numbe
     ctx.fillStyle = '#4fc3a8'; ctx.fillRect(-6, -13, 4, 3); ctx.fillRect(2, -13, 4, 3)
     ctx.fillStyle = '#8f6420'; ctx.fillRect(-4, -7, 8, 2)
     ctx.fillStyle = '#fff0b0'; ctx.fillRect(-8, -16, 3, 6)
+  } else if (kind === 'emerald') {
+    // A cut emerald: a faceted crown and a pavilion tapering to a point, with a bright table.
+    const facet = (color: string, points: number[]) => { ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(points[0]!, points[1]!); for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i]!, points[i + 1]!); ctx.closePath(); ctx.fill() }
+    facet('#0f3d28', [-18, -4, -10, -15, 10, -15, 18, -4, 0, 17])
+    facet('#48c27f', [-16, -4, -5, -4, 0, 14]); facet('#239058', [16, -4, 5, -4, 0, 14]); facet('#2f9a63', [-5, -4, 5, -4, 0, 14])
+    facet('#7fe0a8', [-16, -4, -9, -13, -5, -4]); facet('#2f9a63', [16, -4, 9, -13, 5, -4]); facet('#5fd193', [-9, -13, 9, -13, 5, -4, -5, -4])
+    ctx.fillStyle = '#e6fff0'; ctx.fillRect(-6, -11, 5, 2); ctx.fillRect(-11, -4, 3, 6)
+  } else if (kind === 'mask') {
+    // A jade mask: a broad face with inlaid eyes, a carved nose and mouth, gold ear spools and a brow band.
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = '#8f6420'; ctx.beginPath(); ctx.arc(side * 16, 0, 5.5, 0, TAU); ctx.fill()
+      ctx.fillStyle = '#e5ad43'; ctx.beginPath(); ctx.arc(side * 16, -0.5, 4.2, 0, TAU); ctx.fill()
+      ctx.fillStyle = '#5a3d14'; ctx.beginPath(); ctx.arc(side * 16, -0.5, 1.6, 0, TAU); ctx.fill()
+    }
+    ctx.fillStyle = '#1f4f3e'; ctx.beginPath(); ctx.moveTo(-14, -15); ctx.lineTo(14, -15); ctx.quadraticCurveTo(15, 10, 0, 18); ctx.quadraticCurveTo(-15, 10, -14, -15); ctx.fill()
+    ctx.fillStyle = '#3f9a7a'; ctx.beginPath(); ctx.moveTo(-12.5, -13.5); ctx.lineTo(12.5, -13.5); ctx.quadraticCurveTo(13.5, 9, 0, 16.5); ctx.quadraticCurveTo(-13.5, 9, -12.5, -13.5); ctx.fill()
+    ctx.fillStyle = '#5cb895'; ctx.fillRect(-12.5, -13.5, 25, 5); ctx.fillStyle = '#8fdcbb'; ctx.fillRect(-10, -12.5, 7, 2)
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = '#eef6e6'; ctx.beginPath(); ctx.ellipse(side * 5.5, -4, 3.6, 2.2, 0, 0, TAU); ctx.fill()
+      ctx.fillStyle = '#13261f'; ctx.beginPath(); ctx.arc(side * 5.5, -4, 1.4, 0, TAU); ctx.fill()
+    }
+    ctx.fillStyle = '#2b7259'; ctx.beginPath(); ctx.moveTo(-1.5, -3); ctx.lineTo(1.5, -3); ctx.lineTo(3.5, 4); ctx.lineTo(-3.5, 4); ctx.fill()
+    ctx.fillStyle = '#13261f'; ctx.beginPath(); ctx.ellipse(0, 9, 5, 2, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#eef6e6'; for (const dx of [-3, -1, 1]) ctx.fillRect(dx, 7.6, 1.4, 1.4)
+  } else if (kind === 'skull') {
+    // The crystal skull: clear quartz with a cold blue light inside and facets catching the glow.
+    ctx.fillStyle = '#7fb2c899'; ctx.beginPath(); ctx.ellipse(0, -5, 14, 13, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.roundRect(-10, 1, 20, 14, 5); ctx.fill()
+    ctx.fillStyle = '#d4eef7dd'; ctx.beginPath(); ctx.ellipse(0, -5, 12.5, 11.5, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.roundRect(-8.5, 2, 17, 12, 4); ctx.fill()
+    ctx.fillStyle = '#3f6f8a'; ctx.beginPath(); ctx.ellipse(-5, -2, 4.2, 3.8, 0.2, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(5, -2, 4.2, 3.8, -0.2, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#9fe6ff'; ctx.beginPath(); ctx.arc(-5, -2, 1.5, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(5, -2, 1.5, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#5d8ea6'; ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(-2, 6); ctx.lineTo(2, 6); ctx.fill()
+    ctx.strokeStyle = '#6f9fb6'; ctx.lineWidth = 1; ctx.beginPath()
+    for (const dx of [-6, -3, 0, 3, 6]) { ctx.moveTo(dx, 9); ctx.lineTo(dx, 13) }
+    ctx.moveTo(-8, 9); ctx.lineTo(8, 9); ctx.stroke()
+    ctx.strokeStyle = '#ffffffaa'; ctx.beginPath(); ctx.moveTo(-9, -12); ctx.quadraticCurveTo(-3, -16, 3, -15); ctx.moveTo(8, -9); ctx.lineTo(11, -4); ctx.stroke()
   } else if (kind === 'gold' || kind === 'silver') {
     ctx.fillStyle = kind === 'gold' ? '#bf882e' : '#82928d'; ctx.beginPath(); ctx.moveTo(-23, 10); ctx.lineTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(23, 10); ctx.fill()
     ctx.fillStyle = kind === 'gold' ? '#efcc68' : '#dbe0cb'; ctx.beginPath(); ctx.moveTo(-16, -7); ctx.lineTo(16, -7); ctx.lineTo(13, 0); ctx.lineTo(-19, 0); ctx.fill()
@@ -64,14 +99,23 @@ export class JungleRenderer {
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     ctx.clearRect(0, 0, WIDTH, HEIGHT)
     const time = this.reducedMotion ? 0 : clock
-    // The view glides down into a cavern and back up; reduced motion jumps straight there.
+    // The view glides down into a cavern and back up; reduced motion jumps straight there, and so does a
+    // jump of more than a screen, such as a new expedition starting from deep in the caverns.
     const target = game.status === 'tent' ? 0 : game.viewY()
     const ease = 1 - Math.exp(-Math.max(0, Math.min(0.1, clock - this.lastClock)) * 8)
-    this.camera = this.reducedMotion || Math.abs(target - this.camera) < 0.5 ? target : this.camera + (target - this.camera) * ease
+    this.camera = this.reducedMotion || Math.abs(target - this.camera) < 0.5 || Math.abs(target - this.camera) > HEIGHT ? target : this.camera + (target - this.camera) * ease
     this.lastClock = clock
     if (game.status === 'tent') { this.tableTop(ctx, game, time); return }
     ctx.setTransform(scale, 0, 0, scale, 0, -Math.round(this.camera * scale))
-    this.jungle(ctx, game, time)
+    // The jungle scene reaches down to its deep cavern; each level of the lost caverns is a screen lower.
+    // Harry's own level goes last, so he stays in sight on a ladder down into the level below.
+    const levels = Array.from({ length: game.room.cavern ? LOST_CAVERNS.length + 1 : 1 }, (_, depth) => depth)
+      .filter(depth => this.camera < CAVERN_VIEW + HEIGHT + depth * CHAMBER_DEPTH && (!depth || this.camera + HEIGHT > CAVERN_VIEW + depth * CHAMBER_DEPTH))
+      .sort((a, b) => Number(a === game.depth) - Number(b === game.depth))
+    for (const depth of levels) {
+      if (!depth) { this.jungle(ctx, game, time); continue }
+      ctx.save(); ctx.translate(0, depth * CHAMBER_DEPTH); this.chamber(ctx, game, game.cavern(depth)!, time); ctx.restore()
+    }
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
     this.vignette(ctx)
   }
@@ -87,7 +131,8 @@ export class JungleRenderer {
     ctx.drawImage(this.backdrop, 0, 0, WIDTH, HEIGHT)
     this.motes(ctx, time)
     this.terrain(ctx, game, time)
-    if (game.room.cavern) this.cavernBack(ctx, game, time)
+    const cave = game.cavern(0)
+    if (cave) this.chamberBack(ctx, game, cave, time)
     else if (this.camera > 0) { ctx.fillStyle = '#4a4232'; ctx.fillRect(0, HEIGHT, WIDTH, CAVERN_VIEW) }
     if (game.room.vine) {
       const end = game.vine()
@@ -116,18 +161,36 @@ export class JungleRenderer {
       this.sparkle(ctx, 506, GROUND - 52 - bob, 3, '#ffeaaf')
     }
     if (!game.room.ladder) this.scorpion(ctx, game.scorpionX(), UNDERGROUND, time, game.scorpionFacing())
-    if (game.deathTimer <= 0 || Math.floor(game.deathTimer * 12) % 2 === 0) this.player(ctx, game)
-    if (game.room.cavern) this.cavernFront(ctx, game, time)
+    if (!game.depth) this.harry(ctx, game)
+    if (cave) this.chamberFront(ctx, game, cave, time)
     if (game.room.tunnelPit !== null) {
       const x = game.room.tunnelPit, dark = ctx.createLinearGradient(0, UNDERGROUND, 0, HEIGHT)
       dark.addColorStop(0, '#0b0f0c00'); dark.addColorStop(0.6, '#0b0f0c'); ctx.fillStyle = dark
       ctx.fillRect(x - TUNNEL_PIT_HALF, UNDERGROUND, TUNNEL_PIT_HALF * 2, HEIGHT - UNDERGROUND)
     }
+    if (!game.depth) this.particles(ctx, game)
+    this.foreground(ctx, time)
+  }
+
+  // A level of the lost caverns, with Harry in it when he's down there.
+  chamber(ctx: CanvasRenderingContext2D, game: PitfallEngine, c: Chamber, time: number) {
+    const here = game.depth === c.depth
+    this.chamberBack(ctx, game, c, time)
+    if (here) this.harry(ctx, game)
+    this.chamberFront(ctx, game, c, time)
+    if (here) this.particles(ctx, game)
+  }
+
+  // Harry blinks while a lost life plays out.
+  harry(ctx: CanvasRenderingContext2D, game: PitfallEngine) {
+    if (game.deathTimer <= 0 || Math.floor(game.deathTimer * 12) % 2 === 0) this.player(ctx, game)
+  }
+
+  particles(ctx: CanvasRenderingContext2D, game: PitfallEngine) {
     for (const p of game.particles) {
       ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 5, 5)
     }
     ctx.globalAlpha = 1
-    this.foreground(ctx, time)
   }
 
   // Inside the tent, looking down on a camp table: canvas floor, a lantern, a map and a mug around
@@ -292,13 +355,10 @@ export class JungleRenderer {
       for (let y = GROUND + 13; y < UNDERGROUND; y += 16) { ctx.moveTo(462, y); ctx.lineTo(498, y) }
       ctx.stroke()
       if (game.room.holes) {
-        for (const x of [248, 656]) { ctx.fillStyle = '#222b20'; ctx.fillRect(x, GROUND, 56, TUNNEL_TOP - GROUND + 4); ctx.fillStyle = '#6f5b37'; ctx.fillRect(x - 3, GROUND, 5, TUNNEL_TOP - GROUND - 5) }
+        for (const [x, right] of HOLES) { ctx.fillStyle = '#222b20'; ctx.fillRect(x, GROUND, right - x, TUNNEL_TOP - GROUND + 4); ctx.fillStyle = '#6f5b37'; ctx.fillRect(x - 3, GROUND, 5, TUNNEL_TOP - GROUND - 5) }
       }
     }
-    if (game.room.wall) {
-      ctx.fillStyle = '#746549'; ctx.fillRect(690, TUNNEL_TOP - 1, 20, UNDERGROUND - TUNNEL_TOP + 1)
-      for (let y = TUNNEL_TOP - 1; y < UNDERGROUND; y += 12) { ctx.fillStyle = '#38392b'; ctx.fillRect(690, y, 20, 2) }
-    }
+    if (game.room.wall) this.brickWall(ctx)
     if (game.room.tunnelPit !== null) {
       // A black gap in the tunnel floor with crumbled lips; tunnelPitFront darkens Harry as he falls.
       const x = game.room.tunnelPit, w = TUNNEL_PIT_HALF
@@ -319,6 +379,24 @@ export class JungleRenderer {
     ctx.fillText('UNDERGROUND  /  1 PASSAGE = 3 SCENES', 24, TUNNEL_TOP + 44)
     ctx.globalAlpha = 1
     if (game.room.ladder) { ctx.textAlign = 'center'; ctx.fillStyle = '#ddd0a488'; ctx.fillText('↓', 480, 299) }
+  }
+
+  // A wall of red brick in light mortar, floor to roof across the tunnel, laid in a running bond: each
+  // course is offset by half a brick from the one below. Every brick's shade varies a little, and has a
+  // lit top edge and a shadowed bottom one.
+  brickWall(ctx: CanvasRenderingContext2D) {
+    const { left, right } = WALL, top = TUNNEL_TOP - 1, length = 12, course = 9
+    ctx.fillStyle = '#00000040'; ctx.fillRect(left - 3, UNDERGROUND, right - left + 6, 3)
+    ctx.fillStyle = '#d6ccb1'; ctx.fillRect(left, top, right - left, UNDERGROUND - top)
+    for (let y = top + 1, row = 0; y < UNDERGROUND; y += course, row++) {
+      const height = Math.min(course - 2, UNDERGROUND - y)
+      for (let x = left + 1 - (row % 2) * (length + 2) / 2, i = 0; x < right - 1; x += length + 2, i++) {
+        const from = Math.max(x, left + 1), to = Math.min(x + length, right - 1)
+        ctx.fillStyle = ['#a3422c', '#b04d34', '#94392a', '#ab4630'][Math.floor(noise(row * 7 + i) * 4)]!; ctx.fillRect(from, y, to - from, height)
+        ctx.fillStyle = '#c8674b'; ctx.fillRect(from, y, to - from, 1)
+        ctx.fillStyle = '#73291b'; ctx.fillRect(from, y + height - 1, to - from, 1)
+      }
+    }
   }
 
   // A rounded opening in the ground seen at a slight angle. The basin itself stays hidden underground,
@@ -516,13 +594,14 @@ export class JungleRenderer {
     ctx.restore()
   }
 
-  // A deep cavern below the tunnel floor: rock, glowing fungi, the river with its eels, the ledges,
-  // ladders and the idol. Drawn behind Harry; cavernFront adds the water and darkness in front of him.
-  cavernBack(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
-    const c = game.cavern()!, seed = game.room.seed, bottom = CAVERN_VIEW + HEIGHT
-    // Rock between the tunnel floor and the cavern ceiling.
-    ctx.fillStyle = '#4a4232'; ctx.fillRect(0, UNDERGROUND + 5, WIDTH, CAVERN_TOP - UNDERGROUND - 5)
-    for (let i = 0; i < 40; i++) { ctx.fillStyle = i % 2 ? '#3a3427' : '#5d5440'; ctx.fillRect(noise(i + seed) * WIDTH, UNDERGROUND + 9 + noise(i + 70) * 26, 5 + noise(i + 3) * 10, 2) }
+  // A cavern chamber: rock, glowing fungi, rivers with their eels, the ledges, ladders, rats and the
+  // relic. Drawn behind Harry; chamberFront adds the water, bats and darkness in front of him.
+  chamberBack(ctx: CanvasRenderingContext2D, game: PitfallEngine, c: Chamber, time: number) {
+    const seed = c.seed, bottom = CAVERN_VIEW + HEIGHT
+    // Rock above the chamber: below the tunnel floor for a deep cavern, or the level above in the lost caverns.
+    const roof = c.depth ? CAVERN_VIEW : UNDERGROUND + 5
+    ctx.fillStyle = '#4a4232'; ctx.fillRect(0, roof, WIDTH, CAVERN_TOP - roof)
+    for (let i = 0; i < (CAVERN_TOP - roof) * 1.2; i++) { ctx.fillStyle = i % 2 ? '#3a3427' : '#5d5440'; ctx.fillRect(noise(i + seed) * WIDTH, roof + 4 + noise(i + 70) * (CAVERN_TOP - roof - 7), 5 + noise(i + 3) * 10, 2) }
     // Cave air that darkens with depth, and faint columns on the far wall.
     const air = ctx.createLinearGradient(0, CAVERN_TOP, 0, bottom)
     air.addColorStop(0, '#1f2c28'); air.addColorStop(1, '#0b1210')
@@ -537,34 +616,43 @@ export class JungleRenderer {
       ctx.fillStyle = '#3a3427'; ctx.beginPath(); ctx.moveTo(x - w, CAVERN_TOP - 1); ctx.lineTo(x, CAVERN_TOP + length); ctx.lineTo(x + w, CAVERN_TOP - 1); ctx.fill()
       ctx.fillStyle = '#5d5440'; ctx.beginPath(); ctx.moveTo(x - w, CAVERN_TOP - 1); ctx.lineTo(x, CAVERN_TOP + length); ctx.lineTo(x - w * 0.4, CAVERN_TOP - 1); ctx.fill()
     }
-    ctx.fillStyle = '#cbc4a455'; ctx.font = '10px monospace'; ctx.textAlign = 'center'
-    ctx.fillText('DEEP CAVERN  /  ONE GOLDEN IDOL', 480, CAVERN_TOP + 64)
+    // The caption; in the lost caverns it sits to the west, clear of the ladders.
+    ctx.fillStyle = '#cbc4a455'; ctx.font = '10px monospace'; ctx.textAlign = c.depth ? 'left' : 'center'
+    ctx.fillText(c.depth ? `LOST CAVERNS, LEVEL ${c.depth}  /  ${c.name.toUpperCase()}` : 'DEEP CAVERN  /  ONE GOLDEN IDOL', c.depth ? 40 : 480, CAVERN_TOP + 64)
     // River water over a pebbled bed; the ledges below cover its sides.
-    const { river } = c, riverWidth = river.right - river.left
-    ctx.fillStyle = '#2f2c22'; ctx.fillRect(river.left, RIVER_BED, riverWidth, bottom - RIVER_BED)
-    const water = ctx.createLinearGradient(0, WATER_SURFACE, 0, RIVER_BED)
-    water.addColorStop(0, '#24605f'); water.addColorStop(1, '#10302f')
-    ctx.fillStyle = water; ctx.fillRect(river.left, WATER_SURFACE, riverWidth, RIVER_BED - WATER_SURFACE)
-    for (let i = 0; i < 18; i++) {
-      ctx.fillStyle = i % 2 ? '#4f4a3a' : '#6b6450'
-      ctx.beginPath(); ctx.ellipse(river.left + 8 + noise(i + seed) * (riverWidth - 16), RIVER_BED + 1, 4 + noise(i + 5) * 6, 3, 0, Math.PI, TAU); ctx.fill()
-    }
-    // Everything that isn't river or chasm is solid rock, from the ledge tops down.
-    const gaps = [river, ...c.chasms].sort((a, b) => a.left - b.left)
-    let from = CAVERN_WALL
-    for (const edge of [...gaps, { left: WIDTH - CAVERN_WALL, right: WIDTH }]) {
+    c.rivers.forEach((river, r) => {
+      const riverWidth = river.right - river.left
+      ctx.fillStyle = '#2f2c22'; ctx.fillRect(river.left, RIVER_BED, riverWidth, bottom - RIVER_BED)
+      const water = ctx.createLinearGradient(0, WATER_SURFACE, 0, RIVER_BED)
+      water.addColorStop(0, '#24605f'); water.addColorStop(1, '#10302f')
+      ctx.fillStyle = water; ctx.fillRect(river.left, WATER_SURFACE, riverWidth, RIVER_BED - WATER_SURFACE)
+      for (let i = 0; i < riverWidth / 16; i++) {
+        ctx.fillStyle = i % 2 ? '#4f4a3a' : '#6b6450'
+        ctx.beginPath(); ctx.ellipse(river.left + 8 + noise(i + seed + r * 40) * (riverWidth - 16), RIVER_BED + 1, 4 + noise(i + 5) * 6, 3, 0, Math.PI, TAU); ctx.fill()
+      }
+    })
+    // Everything that isn't river or chasm is solid rock, from the ledge tops down. The lost caverns run
+    // on past both ends.
+    const gaps = [...c.rivers, ...c.chasms].sort((a, b) => a.left - b.left), wall = c.walls ? CAVERN_WALL : 0
+    let from = wall
+    for (const edge of [...gaps, { left: WIDTH - wall, right: WIDTH }]) {
       const w = edge.left - from
       ctx.fillStyle = '#4b4535'; ctx.fillRect(from, CAVERN_FLOOR, w, bottom - CAVERN_FLOOR)
       ctx.fillStyle = '#3a3427'; for (const y of [24, 50, 84]) ctx.fillRect(from, CAVERN_FLOOR + y + noise(from + y) * 6, w, 2)
-      ctx.fillStyle = '#00000038'; ctx.fillRect(from + w - 4, CAVERN_FLOOR + 5, 4, bottom - CAVERN_FLOOR); ctx.fillStyle = '#ffffff10'; ctx.fillRect(from, CAVERN_FLOOR + 5, 3, bottom - CAVERN_FLOOR)
+      ctx.fillStyle = '#00000038'; if (edge.left < WIDTH) ctx.fillRect(from + w - 4, CAVERN_FLOOR + 5, 4, bottom - CAVERN_FLOOR)
+      ctx.fillStyle = '#ffffff10'; if (from > 0) ctx.fillRect(from, CAVERN_FLOOR + 5, 3, bottom - CAVERN_FLOOR)
       ctx.fillStyle = '#7c7058'; ctx.fillRect(from, CAVERN_FLOOR, w, 5)
       for (let i = 0; i < w / 14; i++) { ctx.fillStyle = '#5f5642'; ctx.fillRect(from + noise(i + from) * (w - 6), CAVERN_FLOOR + 8 + noise(i + from + 9) * 80, 6, 2) }
       from = edge.right
     }
-    ctx.fillStyle = '#2f2a20'; ctx.fillRect(0, CAVERN_TOP, CAVERN_WALL, bottom - CAVERN_TOP); ctx.fillRect(WIDTH - CAVERN_WALL, CAVERN_TOP, CAVERN_WALL, bottom - CAVERN_TOP)
-    // Glowing fungi by each ladder, the only light down here.
-    for (const x of c.ladders) {
-      const fx = x + (x < 480 ? 46 : -46), pulse = 0.2 + Math.sin(time * 1.5 + x) * 0.05
+    if (c.walls) { ctx.fillStyle = '#2f2a20'; ctx.fillRect(0, CAVERN_TOP, CAVERN_WALL, bottom - CAVERN_TOP); ctx.fillRect(WIDTH - CAVERN_WALL, CAVERN_TOP, CAVERN_WALL, bottom - CAVERN_TOP) }
+    const solid = (x: number, margin: number) => gaps.every(g => x + margin <= g.left || x - margin >= g.right)
+    this.decor(ctx, c, time, solid)
+    // Glowing fungi by each ladder, the only light down here, on whichever side has floor for them.
+    for (const x of [...c.ladders, ...c.down]) {
+      const toward = x < 480 ? 46 : -46, fx = [x + toward, x - toward].find(f => solid(f, 16))
+      if (fx === undefined) continue
+      const pulse = 0.2 + Math.sin(time * 1.5 + x) * 0.05
       const glow = ctx.createRadialGradient(fx, CAVERN_FLOOR - 6, 0, fx, CAVERN_FLOOR - 6, 70)
       glow.addColorStop(0, `rgba(127, 224, 200, ${pulse})`); glow.addColorStop(1, 'rgba(127, 224, 200, 0)')
       ctx.fillStyle = glow; ctx.fillRect(fx - 70, CAVERN_FLOOR - 76, 140, 82)
@@ -573,34 +661,41 @@ export class JungleRenderer {
         ctx.fillStyle = '#8fe8cf'; ctx.beginPath(); ctx.ellipse(fx + dx, CAVERN_FLOOR - h, r, r * 0.55, 0, Math.PI, TAU); ctx.fill()
       }
     }
-    for (const x of c.ladders) this.caveLadder(ctx, x)
-    for (const eel of game.eels()) this.eel(ctx, eel.x, eel.y, time, eel.facing)
-    if (!game.idols.has(game.roomIndex)) {
-      const onPillar = game.room.cavern!.idol === 'pillar', bob = onPillar ? Math.sin(time * 3) * 2 : 0
-      const y = c.idol.y - 17 + bob
-      const glow = ctx.createRadialGradient(c.idol.x, y, 0, c.idol.x, y, 50)
-      glow.addColorStop(0, '#f5d47450'); glow.addColorStop(1, '#f5d47400')
-      ctx.fillStyle = glow; ctx.fillRect(c.idol.x - 50, y - 50, 100, 100)
-      drawTreasure(ctx, 'idol', c.idol.x, y)
-      this.sparkle(ctx, c.idol.x - 20, y - 18, 4, '#ffeaaf'); this.sparkle(ctx, c.idol.x + 22, y - 4 - bob, 3, '#ffeaaf')
+    // Ladders up to the tunnel from a deep cavern, or to the level above; ladders down through the floor.
+    for (const x of c.ladders) c.depth ? this.caveLadder(ctx, x, CAVERN_VIEW, CAVERN_FLOOR, CAVERN_VIEW, CAVERN_TOP + 2, false) : this.caveLadder(ctx, x, UNDERGROUND, CAVERN_FLOOR, UNDERGROUND, CAVERN_TOP + 2)
+    for (const x of c.down) this.caveLadder(ctx, x, CAVERN_FLOOR, bottom, CAVERN_FLOOR, bottom)
+    for (const eel of game.eels(game.elapsed, c)) this.eel(ctx, eel.x, eel.y, time, eel.facing)
+    for (const rat of game.rats(game.elapsed, c)) this.rat(ctx, rat.x, CAVERN_FLOOR, time, rat.facing)
+    if (!game.relics.has(c.id)) {
+      // A relic on the floor bobs gently; one on a riverbed rests there.
+      const { kind, x } = c.relic, bob = c.relic.y === CAVERN_FLOOR ? Math.sin(time * 3) * 2 : 0
+      const y = c.relic.y - 17 + bob
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, 50)
+      glow.addColorStop(0, kind === 'skull' ? '#a9e6ff60' : kind === 'emerald' || kind === 'mask' ? '#9be8c050' : '#f5d47450'); glow.addColorStop(1, '#f5d47400')
+      ctx.fillStyle = glow; ctx.fillRect(x - 50, y - 50, 100, 100)
+      drawTreasure(ctx, kind, x, y)
+      this.sparkle(ctx, x - 20, y - 18, 4, '#ffeaaf'); this.sparkle(ctx, x + 22, y - 4 - bob, 3, '#ffeaaf')
     }
   }
 
   // In front of Harry: the water, so he looks submerged, bubbles while he dives, and the darkness
   // that swallows anything falling into the chasm.
-  cavernFront(ctx: CanvasRenderingContext2D, game: PitfallEngine, time: number) {
-    const c = game.cavern()!, p = game.player, bottom = CAVERN_VIEW + HEIGHT
-    const { river } = c, riverWidth = river.right - river.left
-    ctx.fillStyle = '#4aa8a133'; ctx.fillRect(river.left, WATER_SURFACE, riverWidth, RIVER_BED - WATER_SURFACE)
-    ctx.strokeStyle = '#8fd3c833'; ctx.lineWidth = 1.5
-    for (let i = 0; i < 7; i++) {
-      const x = river.left + ((noise(i) * riverWidth + time * 26) % riverWidth), y = WATER_SURFACE + 16 + noise(i + 3) * 72
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(Math.min(river.right, x + 18), y); ctx.stroke()
+  chamberFront(ctx: CanvasRenderingContext2D, game: PitfallEngine, c: Chamber, time: number) {
+    const p = game.player, bottom = CAVERN_VIEW + HEIGHT, here = game.depth === c.depth
+    for (const river of c.rivers) {
+      const riverWidth = river.right - river.left
+      ctx.fillStyle = '#4aa8a133'; ctx.fillRect(river.left, WATER_SURFACE, riverWidth, RIVER_BED - WATER_SURFACE)
+      ctx.strokeStyle = '#8fd3c833'; ctx.lineWidth = 1.5
+      for (let i = 0; i < Math.round(riverWidth / 41); i++) {
+        const x = river.left + ((noise(i) * riverWidth + time * 26) % riverWidth), y = WATER_SURFACE + 16 + noise(i + 3) * 72
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(Math.min(river.right, x + 18), y); ctx.stroke()
+      }
+      ctx.strokeStyle = '#a6e3d6bb'; ctx.lineWidth = 2; ctx.beginPath()
+      for (let x = river.left; x <= river.right; x += 8) ctx.lineTo(x, WATER_SURFACE + Math.sin(time * 2 + x * 0.05) * 1.2)
+      ctx.stroke()
     }
-    ctx.strokeStyle = '#a6e3d6bb'; ctx.lineWidth = 2; ctx.beginPath()
-    for (let x = river.left; x <= river.right; x += 8) ctx.lineTo(x, WATER_SURFACE + Math.sin(time * 2 + x * 0.05) * 1.2)
-    ctx.stroke()
-    if (p.swimming && p.y > WATER_SURFACE + 14) {
+    if (c.kind === 'falls') this.splash(ctx, c, time)
+    if (here && p.swimming && p.y > WATER_SURFACE + 14) {
       ctx.strokeStyle = '#cdeee6aa'; ctx.lineWidth = 1
       const rise = p.y - WATER_SURFACE - 8
       for (let i = 0; i < 3; i++) {
@@ -609,7 +704,7 @@ export class JungleRenderer {
       }
     }
     // Harry's air: one bubble per second above him, turning red and blinking when it runs low.
-    if (p.swimming && p.breath < BREATH) {
+    if (here && p.swimming && p.breath < BREATH) {
       const low = p.breath <= LOW_BREATH
       for (let i = 0; i < BREATH; i++) {
         const x = p.x + (i - (BREATH - 1) / 2) * 8
@@ -630,17 +725,212 @@ export class JungleRenderer {
         ctx.beginPath(); ctx.ellipse(g.left + (g.right - g.left) * (0.3 + i * 0.25) + Math.sin(time * 0.5 + i) * 10, CAVERN_FLOOR + 50 + i * 16, 34, 7, 0, 0, TAU); ctx.fill()
       }
     }
-    darkness(c.pillar.left, c.pillar.right, CAVERN_FLOOR + 40)
+    // A stone between two chasms is a pillar rising out of the dark.
+    const gaps = [...c.rivers, ...c.chasms].sort((a, b) => a.left - b.left)
+    gaps.slice(1).forEach((g, i) => { if (c.chasms.includes(g) && c.chasms.includes(gaps[i]!)) darkness(gaps[i]!.right, g.left, CAVERN_FLOOR + 40) })
+    for (const bat of game.bats(game.elapsed, c)) this.bat(ctx, bat.x, bat.y, time, bat.facing)
   }
 
-  // A ladder down a shaft through the tunnel floor, its rails poking up so it shows from the tunnel.
-  caveLadder(ctx: CanvasRenderingContext2D, x: number) {
-    ctx.fillStyle = '#1c211b'; ctx.fillRect(x - 24, UNDERGROUND, 48, CAVERN_TOP - UNDERGROUND + 2)
+  // A ladder down a shaft through the rock from one floor to the next. Where it leaves a floor, its rails
+  // poke up above it with an arrow so it shows from there. Rungs line up from one cavern level to the next.
+  caveLadder(ctx: CanvasRenderingContext2D, x: number, top: number, bottom: number, shaftTop: number, shaftBottom: number, poke = true) {
+    ctx.fillStyle = '#1c211b'; ctx.fillRect(x - 24, shaftTop, 48, shaftBottom - shaftTop)
+    const from = poke ? top - 12 : top, rung = poke ? top - 4 : bottom - 4
     ctx.strokeStyle = '#ba9e65'; ctx.lineWidth = 5; ctx.beginPath()
-    ctx.moveTo(x - 18, UNDERGROUND - 12); ctx.lineTo(x - 18, CAVERN_FLOOR); ctx.moveTo(x + 18, UNDERGROUND - 12); ctx.lineTo(x + 18, CAVERN_FLOOR)
-    for (let y = UNDERGROUND - 4; y < CAVERN_FLOOR; y += 16) { ctx.moveTo(x - 18, y); ctx.lineTo(x + 18, y) }
+    ctx.moveTo(x - 18, from); ctx.lineTo(x - 18, bottom); ctx.moveTo(x + 18, from); ctx.lineTo(x + 18, bottom)
+    for (let y = rung - Math.floor((rung - from) / 16) * 16; y < bottom; y += 16) { ctx.moveTo(x - 18, y); ctx.lineTo(x + 18, y) }
     ctx.stroke()
-    ctx.fillStyle = '#ddd0a488'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('↓', x, UNDERGROUND - 18)
+    if (poke) { ctx.fillStyle = '#ddd0a488'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('↓', x, top - 18) }
+  }
+
+  // Scenery that sets each kind of chamber apart, drawn over the far wall and the ledges.
+  decor(ctx: CanvasRenderingContext2D, c: Chamber, time: number, solid: (x: number, margin: number) => boolean) {
+    const seed = c.seed, near = (x: number, gap: number) => [...c.ladders, ...c.down, c.relic.x].some(l => Math.abs(l - x) < gap)
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    if (c.kind === 'roost') {
+      // Sleeping bats hanging in rows from the roof, and pale droppings heaped on the ledges below.
+      for (let i = 0; i < 14; i++) {
+        const x = 40 + noise(i * 3 + seed) * 880, y = CAVERN_TOP + 3, sway = Math.sin(time * 1.3 + i) * 0.08
+        ctx.save(); ctx.translate(x, y); ctx.rotate(sway)
+        ctx.strokeStyle = '#2a2026'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-1.5, -3); ctx.lineTo(-1.5, 1); ctx.moveTo(1.5, -3); ctx.lineTo(1.5, 1); ctx.stroke()
+        ctx.fillStyle = '#3b2a35'; ctx.beginPath(); ctx.moveTo(-5, 1); ctx.quadraticCurveTo(-6, 11, 0, 15); ctx.quadraticCurveTo(6, 11, 5, 1); ctx.closePath(); ctx.fill()
+        ctx.fillStyle = '#54404d'; ctx.beginPath(); ctx.ellipse(0, 15, 3, 3, 0, 0, TAU); ctx.fill()
+        ctx.beginPath(); ctx.moveTo(-2.5, 16); ctx.lineTo(-2, 20); ctx.lineTo(-0.5, 17); ctx.moveTo(2.5, 16); ctx.lineTo(2, 20); ctx.lineTo(0.5, 17); ctx.fill()
+        ctx.restore()
+      }
+      for (let i = 0; i < 9; i++) {
+        const x = 50 + noise(i + seed * 5) * 860
+        if (!solid(x, 14) || near(x, 40)) continue
+        ctx.fillStyle = '#8d8672'; ctx.beginPath(); ctx.ellipse(x, CAVERN_FLOOR, 12, 5, 0, Math.PI, TAU); ctx.fill()
+        ctx.fillStyle = '#b3ac94'; ctx.beginPath(); ctx.ellipse(x - 2, CAVERN_FLOOR - 1, 6, 3, 0, Math.PI, TAU); ctx.fill()
+      }
+    } else if (c.kind === 'lake') {
+      // Rippling light thrown up on the far wall, and drips falling from the roof into the water.
+      for (const river of c.rivers) {
+        ctx.strokeStyle = '#8fd3c816'; ctx.lineWidth = 3
+        for (let j = 0; j < 6; j++) {
+          const y = WATER_SURFACE - 30 - j * 22; ctx.beginPath()
+          for (let x = river.left + 10; x <= river.right - 10; x += 12) ctx.lineTo(x, y + Math.sin(time * 1.6 + x * 0.04 + j) * 4)
+          ctx.stroke()
+        }
+        for (let i = 0; i < 3; i++) {
+          const x = river.left + (river.right - river.left) * (0.2 + i * 0.3), fall = (time * 0.6 + noise(i + seed)) % 1
+          const y = CAVERN_TOP + 20 + fall * fall * (WATER_SURFACE - CAVERN_TOP - 20)
+          ctx.fillStyle = '#bfe9e0aa'; ctx.beginPath(); ctx.ellipse(x, y, 1.6, 3, 0, 0, TAU); ctx.fill()
+          const ring = (time * 0.6 + noise(i + seed)) % 1
+          if (ring < 0.35) { ctx.strokeStyle = `rgba(191, 233, 224, ${0.5 - ring})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x, WATER_SURFACE, 4 + ring * 40, 1.5 + ring * 4, 0, 0, TAU); ctx.stroke() }
+        }
+      }
+    } else if (c.kind === 'stones') {
+      // What's left of a rope bridge: a post at each lip of every chasm, its rope snapped and hanging into the dark.
+      for (const g of c.chasms) {
+        for (const [post, side] of [[g.left - 7, 1], [g.right + 7, -1]] as const) {
+          ctx.fillStyle = '#5b4527'; ctx.fillRect(post - 3, CAVERN_FLOOR - 26, 6, 27); ctx.fillStyle = '#7d5d34'; ctx.fillRect(post - 3, CAVERN_FLOOR - 26, 2, 27)
+          const swing = Math.sin(time * 1.1 + post) * 3, endX = post + side * 16 + swing, endY = CAVERN_FLOOR + 70
+          ctx.strokeStyle = '#8f7b50'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(post, CAVERN_FLOOR - 22); ctx.quadraticCurveTo(post + side * 10, CAVERN_FLOOR + 20, endX, endY); ctx.stroke()
+          ctx.save(); ctx.translate(endX, endY); ctx.rotate(side * 0.4 + swing * 0.05); ctx.fillStyle = '#6a5433'; ctx.fillRect(-9, -2, 18, 5); ctx.restore()
+        }
+      }
+    } else if (c.kind === 'rats') {
+      // Burrows along the foot of the far wall, and gnawed bones lying about.
+      for (let i = 0; i < 7; i++) {
+        const x = 70 + noise(i + seed * 2) * 820
+        ctx.fillStyle = '#141814'; ctx.beginPath(); ctx.ellipse(x, CAVERN_FLOOR - 6, 9, 7, 0, Math.PI, TAU); ctx.fill()
+        ctx.fillStyle = '#3a3427'; ctx.fillRect(x - 11, CAVERN_FLOOR - 6, 22, 2)
+      }
+      for (let i = 0; i < 8; i++) {
+        const x = 60 + noise(i * 7 + seed) * 840, a = noise(i + 11) * Math.PI
+        if (!solid(x, 12) || near(x, 30)) continue
+        ctx.strokeStyle = '#d8ccae'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * 7, CAVERN_FLOOR - 1 - Math.sin(a) * 2); ctx.lineTo(x + Math.cos(a) * 7, CAVERN_FLOOR - 1 + Math.sin(a) * 2); ctx.stroke()
+        ctx.fillStyle = '#e6dcc0'; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * Math.cos(a) * 8, CAVERN_FLOOR - 1 + s * Math.sin(a) * 2, 2, 0, TAU); ctx.fill() }
+      }
+    } else if (c.kind === 'falls') {
+      // A waterfall pouring through a crack in the roof into the river.
+      const river = c.rivers[0]!, x = river.left + (river.right - river.left) * 0.6, w = 30, top = CAVERN_TOP
+      ctx.fillStyle = '#141a16'; ctx.beginPath(); ctx.ellipse(x, top + 2, w / 2 + 8, 6, 0, 0, TAU); ctx.fill()
+      const sheet = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0)
+      sheet.addColorStop(0, '#4f9a9444'); sheet.addColorStop(0.5, '#a9e2da99'); sheet.addColorStop(1, '#4f9a9444')
+      ctx.fillStyle = sheet; ctx.fillRect(x - w / 2, top, w, WATER_SURFACE - top)
+      ctx.save(); ctx.beginPath(); ctx.rect(x - w / 2, top, w, WATER_SURFACE - top); ctx.clip()
+      ctx.strokeStyle = '#e4fbf6aa'; ctx.lineWidth = 1.5
+      for (let i = 0; i < 7; i++) {
+        const sx = x - w / 2 + 3 + i * (w - 6) / 6, y = top + ((time * 240 + noise(i + seed) * 300) % (WATER_SURFACE - top + 40)) - 40
+        ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, y + 30); ctx.stroke()
+      }
+      ctx.restore()
+    } else if (c.kind === 'grotto') {
+      // Crystals growing from the roof and the ledges, glowing softly.
+      const cluster = (x: number, y: number, size: number, down: boolean, hue: number) => {
+        const pulse = 0.18 + Math.sin(time * 1.2 + x) * 0.05, color = hue ? '178, 146, 232' : '120, 220, 225'
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 3.2)
+        glow.addColorStop(0, `rgba(${color}, ${pulse})`); glow.addColorStop(1, `rgba(${color}, 0)`)
+        ctx.fillStyle = glow; ctx.fillRect(x - size * 3.2, y - size * 3.2, size * 6.4, size * 6.4)
+        for (const [dx, tilt, length] of [[-5, -0.45, 0.8], [0, 0, 1.2], [5, 0.4, 0.9], [-2, -0.15, 0.6]] as const) {
+          ctx.save(); ctx.translate(x + dx * size / 10, y); ctx.rotate(down ? Math.PI - tilt : tilt); const h = size * 2 * length, w = size * 0.35
+          ctx.fillStyle = `rgba(${color}, 0.75)`; ctx.beginPath(); ctx.moveTo(-w, 0); ctx.lineTo(-w, -h * 0.75); ctx.lineTo(0, -h); ctx.lineTo(w, -h * 0.75); ctx.lineTo(w, 0); ctx.fill()
+          ctx.fillStyle = '#ffffff55'; ctx.beginPath(); ctx.moveTo(-w * 0.6, -2); ctx.lineTo(-w * 0.6, -h * 0.72); ctx.lineTo(0, -h * 0.9); ctx.lineTo(0, -2); ctx.fill()
+          ctx.restore()
+        }
+      }
+      for (let i = 0; i < 6; i++) cluster(70 + noise(i + seed * 4) * 820, CAVERN_TOP + 2, 9 + noise(i + 2) * 5, true, i % 2)
+      for (let i = 0; i < 10; i++) {
+        const x = 40 + noise(i * 5 + seed) * 880
+        if (solid(x, 16) && !near(x, 36)) cluster(x, CAVERN_FLOOR, 7 + noise(i + 6) * 5, false, i % 2)
+      }
+    } else if (c.kind === 'temple') {
+      // A temple sunk into the rock: a wall of fitted blocks between two columns, a carved sun face above
+      // the pillar where the skull rests, and fire bowls burning on the ledges.
+      const left = 340, right = 750, top = CAVERN_TOP + 96
+      for (let y = top, row = 0; y < CAVERN_FLOOR; y += 20, row++) {
+        for (let x = left - (row % 2) * 22; x < right; x += 44) {
+          const x0 = Math.max(left, x), x1 = Math.min(right, x + 42)
+          ctx.fillStyle = noise(x * 0.1 + row) > 0.5 ? '#3a3a30' : '#34352b'; ctx.fillRect(x0, y, x1 - x0, 18)
+        }
+      }
+      for (const x of [left, right]) {
+        ctx.fillStyle = '#4d4b3d'; ctx.fillRect(x - 14, top - 14, 28, CAVERN_FLOOR - top + 14); ctx.fillStyle = '#5f5c4a'; ctx.fillRect(x - 14, top - 14, 6, CAVERN_FLOOR - top + 14)
+        ctx.fillStyle = '#625e4b'; ctx.fillRect(x - 20, top - 22, 40, 10)
+      }
+      ctx.fillStyle = '#4d4b3d'; ctx.fillRect(left - 20, top - 30, right - left + 40, 10)
+      const fx = c.relic.x, fy = top + 50
+      ctx.strokeStyle = '#8f7b50'; ctx.lineWidth = 3
+      for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; ctx.beginPath(); ctx.moveTo(fx + Math.cos(a) * 30, fy + Math.sin(a) * 30); ctx.lineTo(fx + Math.cos(a) * 42, fy + Math.sin(a) * 42); ctx.stroke() }
+      ctx.fillStyle = '#5f5c4a'; ctx.beginPath(); ctx.arc(fx, fy, 28, 0, TAU); ctx.fill()
+      ctx.fillStyle = '#2a2a22'; ctx.fillRect(fx - 15, fy - 8, 10, 6); ctx.fillRect(fx + 5, fy - 8, 10, 6); ctx.fillRect(fx - 10, fy + 8, 20, 5)
+      ctx.fillStyle = '#c89436'; ctx.fillRect(fx - 11, fy - 7, 3, 3); ctx.fillRect(fx + 9, fy - 7, 3, 3)
+      for (let i = 0; i < 4; i++) { ctx.fillStyle = '#2a2a22'; ctx.fillRect(fx - 7 + i * 4, fy + 8, 2, 7) }
+      for (const x of [700, 790]) {
+        if (!solid(x, 12)) continue
+        ctx.fillStyle = '#5b4527'; ctx.fillRect(x - 2, CAVERN_FLOOR - 20, 4, 20); ctx.fillStyle = '#6e6a5f'; ctx.beginPath(); ctx.ellipse(x, CAVERN_FLOOR - 20, 10, 4, 0, 0, Math.PI); ctx.fill()
+        const glow = ctx.createRadialGradient(x, CAVERN_FLOOR - 30, 0, x, CAVERN_FLOOR - 30, 80)
+        glow.addColorStop(0, `rgba(255, 180, 90, ${0.25 + Math.sin(time * 9 + x) * 0.04})`); glow.addColorStop(1, 'rgba(255, 180, 90, 0)')
+        ctx.fillStyle = glow; ctx.fillRect(x - 80, CAVERN_FLOOR - 110, 160, 110)
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = ['#d66939', '#f4ae49', '#ffe09a'][i]!
+          const w = 8 - i * 2.5, flame = -18 + i * 4 + Math.sin(time * 13 + i * 2 + x) * 3
+          ctx.beginPath(); ctx.moveTo(x - w, CAVERN_FLOOR - 21); ctx.quadraticCurveTo(x - w, CAVERN_FLOOR - 28, x + Math.sin(time * 7 + i) * 2, CAVERN_FLOOR - 21 + flame); ctx.quadraticCurveTo(x + w * 0.3, CAVERN_FLOOR - 28, x + w, CAVERN_FLOOR - 21); ctx.fill()
+        }
+      }
+    }
+    ctx.restore()
+  }
+
+  // Foam and spray where a waterfall meets the river, in front of Harry.
+  splash(ctx: CanvasRenderingContext2D, c: Chamber, time: number) {
+    const river = c.rivers[0]!, x = river.left + (river.right - river.left) * 0.6
+    for (let i = 0; i < 10; i++) {
+      const life = (time * 1.4 + noise(i + c.seed)) % 1, dx = (noise(i + 3) - 0.5) * 50
+      ctx.fillStyle = `rgba(228, 251, 246, ${0.45 * (1 - life)})`
+      ctx.beginPath(); ctx.ellipse(x + dx * (0.4 + life), WATER_SURFACE - life * 14, 5 + life * 7, 2.5 + life * 2, 0, 0, TAU); ctx.fill()
+    }
+    const mist = ctx.createRadialGradient(x, WATER_SURFACE, 0, x, WATER_SURFACE, 70)
+    mist.addColorStop(0, '#d8f2ec30'); mist.addColorStop(1, '#d8f2ec00')
+    ctx.fillStyle = mist; ctx.fillRect(x - 70, WATER_SURFACE - 70, 140, 100)
+  }
+
+  // A cave bat on the wing, seen from the front with its wings beating, tilted the way it flies.
+  bat(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, facing: number) {
+    const beat = Math.sin(time * 24 + x * 0.02)
+    ctx.save(); ctx.translate(x, y); ctx.scale(facing, 1); ctx.rotate(0.12)
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    for (const side of [-1, 1]) {
+      const tip = -10 * beat, mid = -4 * beat
+      const edge = () => { ctx.moveTo(side * 3, -3); ctx.quadraticCurveTo(side * 10, -9 + mid, side * 21, tip - 2) }
+      ctx.fillStyle = '#5a4352'; ctx.beginPath(); edge()
+      ctx.quadraticCurveTo(side * 18, tip + 4, side * 15, mid + 4); ctx.quadraticCurveTo(side * 12, mid + 1, side * 9, mid + 5); ctx.quadraticCurveTo(side * 6, 2, side * 3, 4)
+      ctx.closePath(); ctx.fill()
+      ctx.strokeStyle = '#9a7c8f'; ctx.lineWidth = 1.4; ctx.beginPath(); edge(); ctx.stroke()
+    }
+    ctx.fillStyle = '#6b5265'; ctx.beginPath(); ctx.ellipse(0, 1, 4.5, 6, 0, 0, TAU); ctx.fill()
+    ctx.beginPath(); ctx.arc(0.5, -5, 4, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#c9939f'; ctx.beginPath(); ctx.moveTo(-3.5, -7); ctx.lineTo(-2.5, -12.5); ctx.lineTo(-0.6, -8.5); ctx.moveTo(4.5, -7); ctx.lineTo(3.5, -12.5); ctx.lineTo(1.6, -8.5); ctx.fill()
+    ctx.fillStyle = '#ffb46b'; ctx.fillRect(-2, -6.3, 1.5, 1.5); ctx.fillRect(1.5, -6.3, 1.5, 1.5)
+    ctx.fillStyle = '#f2ead8'; ctx.fillRect(-0.9, -2.6, 0.9, 1.6); ctx.fillRect(1, -2.6, 0.9, 1.6)
+    ctx.restore()
+  }
+
+  // A cave rat scurrying along on quick little legs, drawn facing right and mirrored to face the way it runs.
+  rat(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, facing: number) {
+    const run = Math.sin(time * 28 + x * 0.1)
+    ctx.save(); ctx.translate(x, y); ctx.scale(facing, 1)
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    ctx.fillStyle = '#1a140c55'; ctx.beginPath(); ctx.ellipse(0, 0, 15, 2.5, 0, 0, TAU); ctx.fill()
+    ctx.strokeStyle = '#c99a8a'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(-10, -5); ctx.quadraticCurveTo(-20, -2 + run * 2, -28, -7 + run * 3); ctx.stroke()
+    ctx.strokeStyle = '#4e463d'; ctx.lineWidth = 2
+    for (const [hip, phase] of [[-6, 0], [-3, Math.PI], [4, Math.PI / 2], [7, Math.PI * 1.5]] as const) {
+      const step = Math.sin(time * 28 + x * 0.1 + phase) * 3
+      ctx.beginPath(); ctx.moveTo(hip, -4); ctx.lineTo(hip + step, -0.5); ctx.stroke()
+    }
+    ctx.fillStyle = '#3a332c'; ctx.beginPath(); ctx.ellipse(-1, -7, 11, 6.5, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#7d7266'; ctx.beginPath(); ctx.ellipse(-1, -7.5, 10, 5.5, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#a39686'; ctx.beginPath(); ctx.ellipse(-2, -10, 7, 2.2, -0.1, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#7d7266'; ctx.beginPath(); ctx.moveTo(6, -12); ctx.quadraticCurveTo(14, -11, 17, -6); ctx.quadraticCurveTo(12, -3, 5, -3); ctx.fill()
+    ctx.fillStyle = '#e3a3a0'; ctx.beginPath(); ctx.arc(17, -6, 1.6, 0, TAU); ctx.fill()
+    ctx.beginPath(); ctx.ellipse(6, -12.5, 2.8, 3.2, -0.3, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#1b130b'; ctx.beginPath(); ctx.arc(10.5, -9, 1.3, 0, TAU); ctx.fill()
+    ctx.fillStyle = '#ff9b7a'; ctx.fillRect(10.6, -9.6, 0.7, 0.7)
+    ctx.strokeStyle = '#d8ccae88'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(15, -6); ctx.lineTo(21, -8); ctx.moveTo(15, -5.5); ctx.lineTo(21, -4); ctx.stroke()
+    ctx.restore()
   }
 
   // An electric eel, drawn facing right and mirrored to face the way it swims. Sparks crackle along it.
