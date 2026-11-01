@@ -620,7 +620,7 @@ export class JungleRenderer {
     }
     // The caption; in the lost caverns it sits to the west, clear of the ladders.
     ctx.fillStyle = '#cbc4a455'; ctx.font = '10px monospace'; ctx.textAlign = c.depth ? 'left' : 'center'
-    ctx.fillText(c.depth ? `LOST CAVERNS, LEVEL ${c.depth}  /  ${c.name.toUpperCase()}` : 'DEEP CAVERN  /  ONE GOLDEN IDOL', c.depth ? 40 : 480, CAVERN_TOP + 64)
+    ctx.fillText(c.depth ? `LOST CAVERNS, LEVEL ${c.depth}  /  ${c.name.toUpperCase()}` : (c.relic ? 'DEEP CAVERN  /  ONE GOLDEN IDOL' : 'DEEP CAVERN'), c.depth ? 40 : 480, CAVERN_TOP + 64)
     // River water over a pebbled bed; the ledges below cover its sides.
     c.rivers.forEach((river, r) => {
       const riverWidth = river.right - river.left
@@ -668,7 +668,7 @@ export class JungleRenderer {
     for (const x of c.down) this.caveLadder(ctx, x, CAVERN_FLOOR, bottom, CAVERN_FLOOR, bottom)
     for (const eel of game.eels(game.elapsed, c)) this.eel(ctx, eel.x, eel.y, time, eel.facing)
     for (const rat of game.rats(game.elapsed - game.roomEnteredAt, c)) this.rat(ctx, rat.x, CAVERN_FLOOR, time, rat.facing)
-    if (!game.relics.has(c.id)) {
+    if (c.relic && !game.relics.has(c.id)) {
       // A relic on the floor bobs gently; one on a riverbed rests there.
       const { kind, x } = c.relic, bob = c.relic.y === CAVERN_FLOOR ? Math.sin(time * 3) * 2 : 0
       const y = c.relic.y - 17 + bob
@@ -747,7 +747,7 @@ export class JungleRenderer {
 
   // Scenery that sets each kind of chamber apart, drawn over the far wall and the ledges.
   decor(ctx: CanvasRenderingContext2D, c: Chamber, time: number, solid: (x: number, margin: number) => boolean) {
-    const seed = c.seed, near = (x: number, gap: number) => [...c.ladders, ...c.down, c.relic.x].some(l => Math.abs(l - x) < gap)
+    const seed = c.seed, near = (x: number, gap: number) => [...c.ladders, ...c.down, ...(c.relic ? [c.relic.x] : [])].some(l => Math.abs(l - x) < gap)
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'
     if (c.kind === 'roost') {
       // Sleeping bats hanging in rows from the roof, and pale droppings heaped on the ledges below.
@@ -854,7 +854,7 @@ export class JungleRenderer {
         ctx.fillStyle = '#625e4b'; ctx.fillRect(x - 20, top - 22, 40, 10)
       }
       ctx.fillStyle = '#4d4b3d'; ctx.fillRect(left - 20, top - 30, right - left + 40, 10)
-      const fx = c.relic.x, fy = top + 50
+      const fx = c.relic?.x ?? 545, fy = top + 50
       ctx.strokeStyle = '#8f7b50'; ctx.lineWidth = 3
       for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; ctx.beginPath(); ctx.moveTo(fx + Math.cos(a) * 30, fy + Math.sin(a) * 30); ctx.lineTo(fx + Math.cos(a) * 42, fy + Math.sin(a) * 42); ctx.stroke() }
       ctx.fillStyle = '#5f5c4a'; ctx.beginPath(); ctx.arc(fx, fy, 28, 0, TAU); ctx.fill()

@@ -319,13 +319,13 @@ test('every cavern is one tunnel screen west of the ladder three scenes east', (
     assert.equal(game.player.layer, 'cavern', `cavern under scene ${cave.id + 1}`)
   }
 })
-test('mirrored caverns put the river on the right, with the ladders, chasm and idol mirrored too', () => {
+test('mirrored caverns put the river on the right, with the ladders and chasm mirrored too', () => {
   const plain = inCavern(c => !c.flip && c.idol === 'pillar').cavern(), mirrored = inCavern(c => c.flip && c.idol === 'pillar').cavern()
   assert.deepEqual(plain.rivers, [{ left: RIVER[0], right: RIVER[1], eels: 'sb' }])
   assert.deepEqual(mirrored.rivers, [{ left: WIDTH - RIVER[1], right: WIDTH - RIVER[0], eels: 'sb' }])
   assert.deepEqual(mirrored.ladders, plain.ladders.map(x => WIDTH - x))
   assert.deepEqual(mirrored.down, plain.down.map(x => WIDTH - x))
-  assert.equal(mirrored.relic.x, WIDTH - plain.relic.x)
+  assert.deepEqual(mirrored.chasms, plain.chasms.map(({ left, right }) => ({ left: WIDTH - right, right: WIDTH - left })))
 })
 test('a shaft in the tunnel floor leads down to the cavern and back up, with the view following Harry', () => {
   const game = running(); roomOf(game, r => r.cavern && !r.cavern.flip)
@@ -399,7 +399,7 @@ test('golden idols are bonus loot: worth 6,000 once each, and not among the 32 t
   Object.assign(diver.player, swimmer(diver.cavern().relic.x))
   advance(diver, 1.5, { down: true }); assert.equal(diver.score, 2000 + IDOL_VALUE); assert.ok(diver.relics.has(diver.cavern().id))
   advance(diver, 1, { down: true }); assert.equal(diver.score, 2000 + IDOL_VALUE); assert.equal(diver.treasureCount, 0)
-  const climber = inCavern(c => c.idol === 'pillar'); climber.player.x = climber.cavern().relic.x
+  const climber = inCavern(c => c.idol === 'river'); climber.eels = () => []; Object.assign(climber.player, swimmer(climber.cavern().relic.x, RIVER_BED - 8))
   advance(climber, 0.1); assert.equal(climber.score, 2000 + IDOL_VALUE); assert.equal(climber.status, 'playing')
   climber.depth = 1; climber.chambersFound.add(9)
   climber.start(); assert.equal(climber.relics.size, 0); assert.equal(climber.cavernsFound.size, 0); assert.equal(climber.chambersFound.size, 0); assert.equal(climber.depth, 0)
@@ -439,17 +439,20 @@ function inChamber(depth, column, place = {}) {
 }
 const gapsOf = c => [...c.rivers, ...c.chasms].sort((a, b) => a.left - b.left)
 const onFloor = (c, x, margin = 0) => gapsOf(c).every(g => x + margin <= g.left || x - margin >= g.right)
-test('two levels of lost caverns lie below the deep caverns, eight chambers each, and every chamber holds a relic', () => {
+test('cavern rewards match the surface frequency with one relic per eight-chamber level', () => {
   const { chambers } = new PitfallEngine()
   assert.equal(chambers.length, 24); assert.deepEqual(chambers.map(c => c.id), chambers.map((_, i) => i))
   assert.deepEqual(chambers.map(c => c.depth), [0, 1, 2].flatMap(d => Array(8).fill(d)))
   assert.ok(chambers.every(c => c.walls === (c.depth === 0)))
-  const relics = depth => chambers.filter(c => c.depth === depth).map(c => c.relic.kind).sort()
-  assert.deepEqual(relics(0), Array(8).fill('idol')); assert.deepEqual(relics(1), Array(8).fill('emerald'))
-  assert.deepEqual(relics(2), [...Array(7).fill('mask'), 'skull'])
-  assert.equal(chambers.reduce((sum, c) => sum + RELIC_VALUES[c.relic.kind], 0), 117000)
+  const relics = depth => chambers.filter(c => c.depth === depth && c.relic).map(c => c.relic.kind).sort()
+  assert.deepEqual(relics(0), ['idol']); assert.deepEqual(relics(1), ['emerald'])
+  assert.deepEqual(relics(2), ['skull'])
+  assert.ok(Math.abs(chambers.filter(c => c.relic).length / chambers.length - createWorld().filter(r => r.treasure).length / 255) < 0.001)
+  assert.deepEqual(chambers, new PitfallEngine().chambers)
+  assert.equal(chambers.reduce((sum, c) => sum + (c.relic ? RELIC_VALUES[c.relic.kind] : 0), 0), 19000)
   assert.equal(new Set(chambers.filter(c => c.depth).map(c => c.name)).size, 16)
   for (const c of chambers) {
+    if (!c.relic) continue
     const { x, y } = c.relic
     assert.ok(y === RIVER_BED ? c.rivers.some(r => x > r.left + 30 && x < r.right - 30) : onFloor(c, x, 4), `${c.name} relic`)
   }
@@ -595,3 +598,19 @@ test('relics in the lost caverns are worth their value once each; a fall puts Ha
   advance(stones, 1.5, { right: true }); assert.equal(stones.lives, 2); assert.ok(stones.player.inChasm)
   advance(stones, 1); assert.equal(stones.depth, 1); assert.equal(stones.player.x, CAVERN_WALL + 12); assert.equal(stones.player.y, CAVERN_FLOOR)
 })
+
+test('empty cavern chambers never award loot on the floor or riverbed', () => {
+  for (const chamber of new PitfallEngine().chambers.filter(c => !c.relic)) {
+    const game = inChamber(chamber.depth, chamber.column, { x: 560 });
+    game.bats = () => []; game.rats = () => []; game.eels = () => [];
+    advance(game, 0.1);
+    if (chamber.rivers.length) {
+      const river = chamber.rivers[0];
+      Object.assign(game.player, swimmer((river.left + river.right) / 2, RIVER_BED - 8));
+      advance(game, 0.1, { down: true });
+    }
+    game.takeRelic(game.cavern());
+    assert.equal(game.score, 2000); assert.equal(game.relics.size, 0);
+    assert.ok(!game.events.includes('treasure'));
+  }
+});

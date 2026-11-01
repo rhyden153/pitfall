@@ -62,8 +62,7 @@ export const EEL_REACH = { x: 30, y: 13 } as const
 // last. A ladder on each deep cavern's middle ledge leads down to them.
 export const CHAMBER_DEPTH = HEIGHT
 export const DEEPER_LADDER = 560
-// Every cavern chamber hides a relic: bonus loot on top of the 32 treasures needed to win. The deep
-// caverns hold golden idols.
+// Cavern relics are sparse bonus loot outside the 32 treasures needed to win.
 export const RELIC_VALUES = { emerald: 3000, mask: 5000, idol: 6000, skull: 10000 } as const
 export const IDOL_VALUE = RELIC_VALUES.idol
 // Bats swing to and fro like pendulums: up near the roof at both ends of their flight, swooping down to
@@ -107,7 +106,7 @@ export type Chamber = {
   walls: boolean
   // Ladders lead up out of the chamber, and down from its floor into the chamber below.
   rivers: River[]; chasms: Span[]; ladders: number[]; down: number[]
-  bats: Span[]; rats: Span[]; relic: { kind: Relic; x: number; y: number }
+  bats: Span[]; rats: Span[]; relic: { kind: Relic; x: number; y: number } | null
 }
 // A chamber's layout: its rivers (with their eel lanes), bottomless chasms, ladders, the spans bats and
 // rats patrol, and where its relic lies, on the floor or a riverbed.
@@ -210,7 +209,12 @@ export function createCaverns(rooms: Room[]): Chamber[] {
     name: 'Deep cavern', kind: 'cavern', up: CAVERN_LADDERS, down: [DEEPER_LADDER], rivers: [[...RIVER, 'sb']], chasms: CHASMS,
     relic: ['idol', room.cavern!.idol === 'river' ? (RIVER[0] + RIVER[1]) / 2 : (CHASMS[0][1] + CHASMS[1][0]) / 2],
   }, room.cavern!.flip))
-  return [...deep, ...LOST_CAVERNS.flatMap((level, i) => level.map((plan, column) => chamber(i + 1, column, 31 * (i + 1) + 7 * column, plan)))]
+  const chambers = [...deep, ...LOST_CAVERNS.flatMap((level, i) => level.map((plan, column) => chamber(i + 1, column, 31 * (i + 1) + 7 * column, plan)))]
+  // Surface treasure appears in 32 of 255 scenes (about one in eight). Keep one
+  // relic per eight-chamber level: a river idol, an emerald, and the temple skull.
+  const rewardColumns = [0, 0, 4]
+  for (const c of chambers) if (c.column !== rewardColumns[c.depth]) c.relic = null
+  return chambers
 }
 
 export class PitfallEngine {
@@ -609,7 +613,7 @@ export class PitfallEngine {
         this.events.push('squeak'); this.die('Bitten! Jump the cave rats as they scurry past.')
         return
       }
-      if (c.relic.y === CAVERN_FLOOR && Math.abs(p.x - c.relic.x) < 24 && p.y > CAVERN_FLOOR - 64) this.takeRelic(c)
+      if (c.relic && c.relic.y === CAVERN_FLOOR && Math.abs(p.x - c.relic.x) < 24 && p.y > CAVERN_FLOOR - 64) this.takeRelic(c)
     }
   }
 
@@ -622,7 +626,7 @@ export class PitfallEngine {
     if (!c.depth) {
       if (this.cavernsFound.has(this.roomIndex)) return
       this.cavernsFound.add(this.roomIndex)
-      this.announce('A hidden cavern! Somewhere down here lies a golden idol.', 4)
+      this.announce(c.relic ? 'A hidden cavern! Somewhere down here lies a golden idol.' : 'A hidden cavern! Explore the river and chasm, or take the ladder deeper.', 4)
     } else if (lost) this.announce('The lost caverns! They run on east and west beneath the whole jungle.', 4)
     else this.announce(first ? `${c.name}: a new chamber.` : c.name, 2)
   }
@@ -658,11 +662,11 @@ export class PitfallEngine {
       this.events.push('zap'); this.die('Zap! Electric eels guard this river.')
       return
     }
-    if (c.relic.y === RIVER_BED && Math.abs(p.x - c.relic.x) < 24 && p.y > RIVER_BED - 26) this.takeRelic(c)
+    if (c.relic && c.relic.y === RIVER_BED && Math.abs(p.x - c.relic.x) < 24 && p.y > RIVER_BED - 26) this.takeRelic(c)
   }
 
   takeRelic(c: Chamber) {
-    if (this.relics.has(c.id)) return
+    if (!c.relic || this.relics.has(c.id)) return
     this.relics.add(c.id)
     const { kind, x, y } = c.relic, value = RELIC_VALUES[kind]
     const name = { idol: 'A golden idol', emerald: 'An emerald', mask: 'A jade mask', skull: 'The crystal skull' }[kind]
